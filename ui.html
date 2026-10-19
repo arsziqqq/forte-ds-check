@@ -1,0 +1,1189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --surface-active: #eef7ff;
+    --text: #0b0f1c;
+    --text-2: #64748b;
+    --text-3: #94a3b8;
+    --accent: #1464a5;
+    --accent-text: #1464a5;
+    --accent-hover: #195991;
+    --accent-pressed: #1b4d7e;
+    --on-accent: #ffffff;
+    --border: #e0e9f6;
+    --border-2: #c4cedd;
+    --disabled: #ecf1f8;
+    --error: #d61f06;
+    --error-bg: #fff3f2;
+    --warning: #a37a0e;
+    --warning-dot: #f0c54f;
+    --warning-bg: #fdf9eb;
+    --info: #1464a5;
+    --info-bg: #eef7ff;
+    --success: #48b03a;
+    --success-bg: #ebf6e9;
+    --shadow-m: 0 2px 12px rgba(148, 163, 184, .4);
+    --r-s: 8px;
+    --r-m: 12px;
+    --r-l: 16px;
+  }
+  html.figma-dark {
+    --bg: #15171d;
+    --surface: #1e2129;
+    --surface-2: #272b36;
+    --surface-active: #353a46;
+    --text: #ffffff;
+    --text-2: #94a3b8;
+    --text-3: #64748b;
+    --accent: #1464a5;
+    --accent-text: #55b3ff;
+    --accent-hover: #195991;
+    --accent-pressed: #1b4d7e;
+    --border: #334155;
+    --border-2: #475569;
+    --disabled: #1e293b;
+    --error: #e05744;
+    --error-bg: rgba(224, 87, 68, .14);
+    --warning: #f2cb63;
+    --warning-dot: #f2cb63;
+    --warning-bg: rgba(242, 203, 99, .12);
+    --info: #55b3ff;
+    --info-bg: rgba(61, 156, 233, .14);
+    --success: #5cb950;
+    --success-bg: rgba(92, 185, 80, .14);
+    --shadow-m: 0 2px 12px rgba(11, 15, 28, .7);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 400 13px/1.4 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  svg { display: block; flex: none; }
+
+  #app { height: 100%; display: flex; flex-direction: column; }
+
+  /* top bar */
+  .topbar {
+    flex: none;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    display: flex;
+    align-items: stretch;
+    gap: 20px;
+    height: 44px;
+  }
+  .tab {
+    border: 0; background: none; padding: 0;
+    font-weight: 600; font-size: 13px; color: var(--text-2);
+    position: relative; display: flex; align-items: center;
+  }
+  .tab[aria-selected="true"] { color: var(--text); }
+  .tab[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    background: var(--accent); border-radius: 2px 2px 0 0;
+  }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 12px 12px 24px; }
+  .scroll::-webkit-scrollbar { width: 8px; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 8px; border: 2px solid var(--bg); }
+
+  .card {
+    background: var(--surface);
+    border-radius: var(--r-l);
+    padding: 16px;
+    margin-bottom: 8px;
+  }
+  .card-title { font-weight: 700; font-size: 14px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .card-title .muted { font-weight: 400; }
+
+  .field { margin-bottom: 12px; }
+  .field:last-child { margin-bottom: 0; }
+  .label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+  .hint { font-size: 12px; color: var(--text-2); margin: 6px 0 0; }
+  .muted { color: var(--text-2); }
+  .faint { color: var(--text-3); }
+
+  .input, .select, .textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-m);
+    height: 40px;
+    padding: 0 12px;
+    outline: none;
+    transition: border-color .12s;
+  }
+  .textarea { height: auto; min-height: 88px; padding: 10px 12px; resize: vertical; line-height: 1.45; }
+  .input:hover, .select:hover, .textarea:hover { border-color: var(--border-2); }
+  .input:focus, .select:focus, .textarea:focus { border-color: var(--accent); }
+  .input::placeholder, .textarea::placeholder { color: var(--text-3); }
+  .select {
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 36px;
+    text-overflow: ellipsis;
+  }
+  .select.sm { height: 30px; border-radius: var(--r-s); font-size: 12px; padding: 0 28px 0 10px; background-position: right 8px center; width: auto; }
+
+  .seg {
+    display: flex; background: var(--surface-2); border-radius: var(--r-m); padding: 3px; gap: 3px;
+  }
+  .seg button {
+    flex: 1; border: 0; background: transparent; border-radius: 9px; height: 34px; padding: 0 8px;
+    color: var(--text-2); font-weight: 600; font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(148, 163, 184, .35); }
+  html.figma-dark .seg button[aria-pressed="true"] { box-shadow: none; background: var(--surface-active); }
+  .seg button:disabled { opacity: .5; cursor: default; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 40px; padding: 0 16px; border-radius: var(--r-m);
+    border: 1px solid transparent; font-weight: 600; font-size: 13px;
+    transition: background .12s, border-color .12s, color .12s;
+    white-space: nowrap;
+  }
+  .btn.block { width: 100%; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn.primary:active { background: var(--accent-pressed); }
+  .btn.secondary { background: var(--surface); border-color: var(--border); color: var(--accent-text); }
+  .btn.secondary:hover { border-color: var(--border-2); }
+  .btn.ghost { background: transparent; color: var(--accent-text); padding: 0 8px; height: 30px; }
+  .btn.ghost:hover { background: var(--surface-active); }
+  .btn.danger { background: transparent; color: var(--error); padding: 0 8px; }
+  .btn.danger:hover { background: var(--error-bg); }
+  .btn.sm { height: 30px; padding: 0 10px; font-size: 12px; border-radius: var(--r-s); }
+  .btn:disabled { background: var(--disabled); color: var(--text-3); border-color: transparent; cursor: default; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn { flex: 1; }
+
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: var(--r-s); border: 0; background: transparent; color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+
+  .back {
+    display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0;
+    color: var(--text-2); font-size: 12px; margin: 2px 0 12px 4px;
+  }
+  .back:hover { color: var(--text); }
+
+  /* summary */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat {
+    border: 1px solid transparent; background: var(--surface-2); border-radius: var(--r-m);
+    padding: 10px 12px; text-align: left;
+  }
+  .stat .num { font-size: 20px; font-weight: 700; line-height: 1.2; }
+  .stat .lbl { font-size: 12px; color: var(--text-2); }
+  .stat.error .num { color: var(--error); }
+  .stat.warning .num { color: var(--warning); }
+  .stat.info .num { color: var(--info); }
+  .stat[aria-pressed="true"] { background: var(--surface); border-color: var(--accent); }
+  .stat:disabled { cursor: default; }
+  .stat:disabled .num { color: var(--text-3); }
+  .meta { font-size: 12px; color: var(--text-2); margin-top: 10px; }
+
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; height: 30px; padding: 0 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+    font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .chip .n { color: var(--text-3); font-weight: 600; }
+  .chip[aria-pressed="true"] { background: var(--surface-active); border-color: var(--surface-active); color: var(--accent-text); }
+  .chip[aria-pressed="true"] .n { color: var(--accent-text); }
+  .chip:disabled { opacity: .45; cursor: default; }
+
+  .notice {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--info-bg); border-radius: var(--r-m); padding: 10px 12px; margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .notice svg { color: var(--info); margin-top: 1px; }
+  .notice.warn { background: var(--warning-bg); }
+  .notice.warn svg { color: var(--warning); }
+  .notice .grow { flex: 1; }
+  .notice .btn { margin: -4px -4px -4px 0; }
+
+  /* groups */
+  .group { background: var(--surface); border-radius: var(--r-l); margin-bottom: 8px; overflow: hidden; }
+  .group-head {
+    width: 100%; border: 0; background: none; text-align: left;
+    display: flex; align-items: center; gap: 10px; padding: 14px 12px 14px 16px;
+  }
+  .group-head:hover { background: var(--surface-2); }
+  .sev-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .sev-dot.error { background: var(--error); }
+  .sev-dot.warning { background: var(--warning-dot); }
+  .sev-dot.info { background: var(--info); }
+  .group-title { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; }
+  .count {
+    min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface-2);
+    font-size: 11px; font-weight: 700; color: var(--text-2); display: inline-flex; align-items: center; justify-content: center;
+  }
+  .chev { color: var(--text-3); transition: transform .15s; }
+  .group[data-open="true"] .chev { transform: rotate(180deg); }
+  .group-body { border-top: 1px solid var(--border); }
+  .group-hint { padding: 10px 16px; font-size: 12px; color: var(--text-2); display: flex; gap: 8px; align-items: flex-start; }
+  .group-hint .grow { flex: 1; }
+
+  .row {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 10px 12px 10px 16px; border-top: 1px solid var(--border); cursor: pointer;
+  }
+  .row:hover { background: var(--surface-2); }
+  .row.done { opacity: .55; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-name { font-weight: 600; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .row-name .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag {
+    flex: none; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: var(--text-2);
+    background: var(--surface-2); border-radius: 4px; padding: 1px 5px;
+  }
+  .row-path { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .row-val { font-size: 12px; color: var(--text-2); margin-top: 4px; word-break: break-word; }
+  .row-val b { font-weight: 600; color: var(--text); }
+  .row-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(11, 15, 28, .14); display: inline-block; vertical-align: -1px; margin-right: 4px; }
+  .arrow { color: var(--accent-text); font-weight: 600; }
+  .approx { color: var(--warning); }
+  .select.xs { height: 24px; width: auto; max-width: 220px; font-size: 11px; border-radius: 6px; padding: 0 22px 0 8px; background-position: right 4px center; color: var(--accent-text); font-weight: 600; }
+  .row-sub { align-items: center; }
+  .row-act { flex: none; display: flex; align-items: center; min-height: 30px; }
+  .done-mark { display: inline-flex; align-items: center; gap: 4px; color: var(--success); font-size: 12px; font-weight: 600; }
+  .more { width: 100%; border: 0; border-top: 1px solid var(--border); background: none; height: 40px; color: var(--accent-text); font-weight: 600; font-size: 12px; }
+  .more:hover { background: var(--surface-2); }
+
+  /* empty */
+  .empty { text-align: center; padding: 28px 16px; }
+  .empty .badge {
+    width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-active); color: var(--accent-text);
+  }
+  .empty .badge.ok { background: var(--success-bg); color: var(--success); }
+  .empty h3 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+  .empty p { margin: 0 0 16px; color: var(--text-2); font-size: 12px; }
+  .empty p:last-child { margin-bottom: 0; }
+
+  .progress { height: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 12px; }
+  .progress i { display: block; height: 100%; width: 35%; background: var(--accent); border-radius: 4px; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+
+  /* profiles */
+  .plist { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .pcard {
+    background: var(--surface); border-radius: var(--r-l); padding: 14px 12px 14px 16px; border: 1px solid transparent;
+    display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  }
+  .pcard:hover { border-color: var(--border); }
+  .pcard .grow { flex: 1; min-width: 0; }
+  .pcard .name { font-weight: 700; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .pcard .sub { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+  .ptag { font-size: 11px; font-weight: 600; color: var(--accent-text); background: var(--surface-active); border-radius: 6px; padding: 1px 6px; }
+
+  .src { border: 1px solid var(--border); border-radius: var(--r-m); padding: 10px 8px 10px 12px; margin-bottom: 8px; display: flex; gap: 8px; }
+  .src .grow { flex: 1; min-width: 0; }
+  .src .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src .facts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .fact { font-size: 11px; color: var(--text-2); background: var(--surface-2); border-radius: 6px; padding: 2px 6px; }
+  .fact b { color: var(--text); font-weight: 600; }
+  .src .when { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+  .src .acts { display: flex; flex-direction: column; gap: 2px; }
+
+  .add-src { border: 1px solid var(--border); border-radius: var(--r-m); margin-top: 8px; }
+  .add-src .opt { padding: 12px; }
+  .add-src .opt + .opt { border-top: 1px solid var(--border); }
+  .opt-title { font-weight: 600; margin-bottom: 2px; }
+  .pick {
+    width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+    padding: 8px 12px 8px 8px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface);
+  }
+  .pick:hover { border-color: var(--border-2); }
+  .pick .thumb {
+    width: 72px; height: 56px; flex: none; border-radius: var(--r-s); overflow: hidden;
+    background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .pick .thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+  .pick .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pick .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick .d { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick.empty { border-style: dashed; padding: 14px 12px; cursor: default; }
+  .pick.empty svg { color: var(--text-3); }
+  .pick.empty .d { white-space: normal; }
+  .sync-row {
+    display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 4px 0 14px;
+    border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font-size: 12px; font-weight: 600;
+  }
+  .sync-row .grow { flex: 1; min-width: 0; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .rule { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .rule:first-of-type { border-top: 0; }
+  .rule .grow { flex: 1; min-width: 0; }
+  .rule .t { font-weight: 600; }
+  .rule .d { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+  .rule .select.sm { width: 148px; flex: none; }
+  .rule-cat { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 2px; }
+  .rule-cat:first-child { margin-top: 0; }
+
+  .sheet-wrap { position: fixed; inset: 0; background: rgba(11, 15, 28, .4); display: flex; align-items: flex-end; z-index: 10; }
+  .sheet { background: var(--surface); width: 100%; border-radius: var(--r-l) var(--r-l) 0 0; padding: 16px; box-shadow: var(--shadow-m); }
+  .sheet .textarea { min-height: 180px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: #0b0f1c; color: #fff; border-radius: var(--r-m); padding: 10px 14px; font-size: 12px;
+    max-width: 360px; box-shadow: var(--shadow-m); z-index: 20;
+  }
+  html.figma-dark .toast { background: #ffffff; color: #0b0f1c; }
+
+  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- icons ----------
+  const I = {
+    chev: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
+    back: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m10 4-4 4 4 4"/></svg>',
+    right: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 4 4-4 4"/></svg>',
+    check: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7"/></svg>',
+    checkL: '<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7"/></svg>',
+    refresh: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6"/><path d="M13 2.5v3h-3"/></svg>',
+    trash: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
+    plus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>',
+    info: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="13" height="13" rx="4" fill="currentColor"/><path d="M8 7.2v3.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="5.2" r=".9" fill="#fff"/></svg>',
+    cursor: '<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3.5 2.5 12 7.2l-3.8 1L6.3 12 3.5 2.5Z"/></svg>',
+    layers: '<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M8 2 2 5.2 8 8.4l6-3.2L8 2Z"/><path d="m2 8 6 3.2L14 8"/><path d="m2 10.8 6 3.2 6-3.2"/></svg>'
+  };
+
+  // ---------- state ----------
+  const S = {
+    ready: false,
+    tab: 'check',
+    view: 'check',            // check | profiles | profile
+    editId: null,
+    data: null,               // persisted state from code.js
+    rules: [], cats: [],
+    file: { name: '', page: '', selection: 0, key: null },
+    thumb: null,              // {id, url} превью выделенного экрана
+    running: false, progress: 0,
+    result: null,
+    sevFilter: null, catFilter: null,
+    open: {},                 // rule id -> bool
+    limit: {},                // rule id -> visible count
+    fixed: {},                // issue id -> true
+    fixing: false,
+    addOpen: false,
+    syncing: null,            // 'file' | 'link' | source id
+    syncText: '',
+    link: '', tokenDraft: '',
+    sheet: null,              // {kind:'export'|'import', text}
+    confirm: null,            // ключ действия, ждущего второго клика
+    toast: null
+  };
+
+  const app = document.getElementById('app');
+  const send = (type, payload) => parent.postMessage({ pluginMessage: Object.assign({ type }, payload || {}) }, '*');
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const plural = (n, one, few, many) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  };
+  const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const uid = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const fmtDate = (t) => {
+    if (!t) return '';
+    const d = new Date(t);
+    const p = (x) => String(x).padStart(2, '0');
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ', ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  };
+
+  const PLATFORMS = [['web', 'Web'], ['ios', 'iOS'], ['android', 'Android'], ['other', 'Другое']];
+  const SEV = { error: 'Ошибка', warning: 'Предупреждение', info: 'Подсказка', off: 'Выключено' };
+  const SEV_ORDER = { error: 0, warning: 1, info: 2 };
+
+  function profiles() { return S.data ? S.data.profiles : []; }
+  function activeProfile() {
+    const ps = profiles();
+    return ps.find((p) => p.id === S.data.activeProfileId) || ps[0] || null;
+  }
+  function editProfile() { return profiles().find((p) => p.id === S.editId) || null; }
+
+  let saveT = null;
+  function persist() {
+    clearTimeout(saveT);
+    saveT = setTimeout(() => send('save-state', { state: S.data }), 150);
+  }
+
+  let toastT = null;
+  function toast(text) {
+    S.toast = text;
+    renderToast();
+    clearTimeout(toastT);
+    toastT = setTimeout(() => { S.toast = null; renderToast(); }, 3200);
+  }
+  function renderToast() {
+    let el = document.querySelector('.toast');
+    if (!S.toast) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+    el.textContent = S.toast;
+  }
+
+  function sourceSummary(p) {
+    let vars = 0, comps = 0, styles = 0;
+    (p.sources || []).forEach((s) => { vars += (s.variables || []).length; comps += (s.components || []).length; styles += (s.styles || []).length; });
+    const n = (p.sources || []).length;
+    if (!n) return 'Нет источников';
+    const parts = [n + ' ' + plural(n, 'источник', 'источника', 'источников')];
+    if (vars) parts.push(fmt(vars) + ' ' + plural(vars, 'переменная', 'переменные', 'переменных'));
+    if (comps) parts.push(fmt(comps) + ' ' + plural(comps, 'компонент', 'компонента', 'компонентов'));
+    if (!vars && !comps && styles) parts.push(styles + ' стилей');
+    return parts.join(' · ');
+  }
+
+  // ---------- render ----------
+  function render() {
+    if (!S.ready) {
+      app.innerHTML = '<div class="scroll"><div class="card empty"><div class="spinner" style="margin:0 auto;color:var(--accent)"></div></div></div>';
+      return;
+    }
+    const scrollEl = app.querySelector('.scroll');
+    const keepScroll = scrollEl ? scrollEl.scrollTop : 0;
+    const sameView = app.dataset.view === S.view + (S.editId || '');
+
+    app.innerHTML =
+      '<header class="topbar" role="tablist">' +
+        '<button class="tab" role="tab" data-act="tab" data-v="check" aria-selected="' + (S.tab === 'check') + '">Проверка</button>' +
+        '<button class="tab" role="tab" data-act="tab" data-v="profiles" aria-selected="' + (S.tab === 'profiles') + '">Профили</button>' +
+      '</header>' +
+      '<main class="scroll">' + (S.view === 'check' ? viewCheck() : S.view === 'profiles' ? viewProfiles() : viewProfile()) + '</main>' +
+      (S.sheet ? viewSheet() : '');
+
+    app.dataset.view = S.view + (S.editId || '');
+    if (sameView) app.querySelector('.scroll').scrollTop = keepScroll;
+  }
+
+  // ----- check view -----
+  function viewCheck() {
+    const ps = profiles();
+    if (!ps.length) {
+      return '<section class="card empty">' +
+        '<div class="badge">' + I.layers + '</div>' +
+        '<h3>Создайте профиль проекта</h3>' +
+        '<p>Профиль говорит плагину, из каких файлов брать токены и компоненты. Например: «Tokens ИБ» + «NEW ИБ Design System».</p>' +
+        '<button class="btn primary" data-act="new-profile">Создать профиль</button>' +
+      '</section>';
+    }
+    const p = activeProfile();
+    const sel = S.file.selection;
+    const noSources = !p.sources || !p.sources.length;
+    let html = '<section class="card">' +
+      '<div class="field"><label class="label" for="prof">Профиль проекта</label>' +
+        '<select id="prof" class="select" data-change="profile">' +
+          ps.map((x) => '<option value="' + x.id + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') +
+        '</select></div>' +
+      '<div class="field"><span class="label">Что проверяем</span>' + viewPick() + '</div>';
+
+    if (noSources) {
+      html += '<div class="notice warn">' + I.info + '<div class="grow">В профиле нет источников. Добавьте файл токенов и файл ДС.</div>' +
+        '<button class="btn ghost sm" data-act="edit-profile" data-id="' + p.id + '">Настроить</button></div>';
+    }
+    if (S.running) {
+      html += '<button class="btn secondary block" data-act="cancel">Остановить</button>' +
+        '<div class="progress" aria-hidden="true"><i></i></div>' +
+        '<p class="hint">Проверено ' + fmt(S.progress) + ' ' + plural(S.progress, 'слой', 'слоя', 'слоёв') + '</p>';
+    } else {
+      html += '<button class="btn primary block" data-act="run"' + (noSources || !sel ? ' disabled' : '') + '>' +
+        (sel > 1 ? 'Проверить ' + sel + ' ' + plural(sel, 'экран', 'экрана', 'экранов') : 'Проверить') + '</button>';
+    }
+    html += '</section>';
+
+    if (S.result && !S.running) html += viewResult();
+    return html;
+  }
+
+  const TYPE_LABELS = { FRAME: 'Фрейм', SECTION: 'Секция', COMPONENT: 'Компонент', COMPONENT_SET: 'Набор вариантов', INSTANCE: 'Инстанс', GROUP: 'Группа', TEXT: 'Текст', RECTANGLE: 'Прямоугольник' };
+
+  function viewPick() {
+    const items = S.file.items || [];
+    if (!S.file.selection || !items.length) {
+      return '<div class="pick empty">' + I.cursor +
+        '<div class="info"><div class="t">Выделите экран на холсте</div>' +
+        '<div class="d">Один или несколько фреймов. Целую страницу не проверяем — это слишком долго.</div></div></div>';
+    }
+    const f = items[0];
+    const thumb = S.thumb && S.thumb.id === f.id ? '<img src="' + S.thumb.url + '" alt="">' : '';
+    let more = '';
+    if (S.file.selection > 1) {
+      const names = items.slice(1, 3).map((x) => '«' + esc(x.name) + '»').join(', ');
+      more = '<div class="d">и ещё ' + (S.file.selection - 1) + ': ' + names + (S.file.selection > 3 ? '…' : '') + '</div>';
+    }
+    return '<button class="pick" data-act="select" data-v="' + esc(f.id) + '" title="Показать на холсте">' +
+      '<span class="thumb">' + thumb + '</span>' +
+      '<span class="info"><span class="t">' + esc(f.name) + '</span>' +
+      '<span class="d">' + (TYPE_LABELS[f.type] || f.type) + ' · ' + f.w + '×' + f.h + ' · ' + esc(S.file.page) + '</span>' + more + '</span>' +
+    '</button>';
+  }
+
+  function filtered() {
+    const r = S.result;
+    const ruleCat = {};
+    S.rules.forEach((x) => { ruleCat[x.id] = x.cat; });
+    return r.issues.filter((i) =>
+      (!S.sevFilter || i.sev === S.sevFilter) &&
+      (!S.catFilter || ruleCat[i.rule] === S.catFilter));
+  }
+
+  function viewResult() {
+    const r = S.result;
+    const by = { error: 0, warning: 0, info: 0 };
+    r.issues.forEach((i) => { by[i.sev] = (by[i.sev] || 0) + 1; });
+    const metaParts = [
+      fmt(r.count) + ' ' + plural(r.count, 'слой', 'слоя', 'слоёв'),
+      fmt(r.instances) + ' ' + plural(r.instances, 'инстанс', 'инстанса', 'инстансов')
+    ];
+    if (r.slots) metaParts.push(r.slots + ' ' + plural(r.slots, 'слот', 'слота', 'слотов'));
+    metaParts.push((r.ms / 1000).toFixed(1).replace('.', ',') + ' с');
+
+    let html = '<section class="card">' +
+      '<div class="stats">' +
+        stat('error', by.error, plural(by.error, 'ошибка', 'ошибки', 'ошибок')) +
+        stat('warning', by.warning, plural(by.warning, 'предупреждение', 'предупреждения', 'предупреждений')) +
+        stat('info', by.info, plural(by.info, 'подсказка', 'подсказки', 'подсказок')) +
+      '</div>' +
+      '<div class="meta">' + esc(r.scopeLabel) + ' · ' + metaParts.join(' · ') + '</div>' +
+    '</section>';
+
+    if (r.cancelled) html += '<div class="notice warn">' + I.info + '<div class="grow">Проверка остановлена — результаты неполные.</div></div>';
+    if (r.truncated) html += '<div class="notice warn">' + I.info + '<div class="grow">Показаны первые 3 000 нарушений. Проверьте меньшую область.</div></div>';
+    if (r.textStylesNoDetails) html += '<div class="notice warn">' + I.info + '<div class="grow">Чтобы плагин подбирал текстовые стили, обновите источник с токенами в профиле (кнопка ↻).</div>' +
+      '<button class="btn ghost sm" data-act="edit-profile" data-id="' + r.profileId + '">Открыть</button></div>';
+    if (!r.hasComponents) html += '<div class="notice">' + I.info + '<div class="grow">В профиле нет файла с компонентами — проверка «Компонент не из ДС» пропущена.</div></div>';
+
+    if (!r.issues.length) {
+      return html + '<section class="card empty"><div class="badge ok">' + I.checkL + '</div><h3>Нарушений не найдено</h3><p>Макет собран на токенах и компонентах профиля «' + esc(activeProfile().name) + '».</p></section>';
+    }
+
+    // category chips
+    const ruleCat = {};
+    S.rules.forEach((x) => { ruleCat[x.id] = x.cat; });
+    const catCount = {};
+    r.issues.forEach((i) => { if (!S.sevFilter || i.sev === S.sevFilter) catCount[ruleCat[i.rule]] = (catCount[ruleCat[i.rule]] || 0) + 1; });
+    const total = Object.keys(catCount).reduce((a, k) => a + catCount[k], 0);
+    html += '<div class="chips" role="group" aria-label="Категории">' +
+      '<button class="chip" data-act="cat" data-v="" aria-pressed="' + (!S.catFilter) + '">Все <span class="n">' + total + '</span></button>' +
+      S.cats.map((c) => '<button class="chip" data-act="cat" data-v="' + c.id + '" aria-pressed="' + (S.catFilter === c.id) + '"' + (catCount[c.id] ? '' : ' disabled') + '>' +
+        esc(c.title) + (catCount[c.id] ? ' <span class="n">' + catCount[c.id] + '</span>' : '') + '</button>').join('') +
+    '</div>';
+
+    const list = filtered();
+    const fixable = list.filter((i) => i.fix && !S.fixed[i.id]);
+    if (fixable.length) {
+      const approxN = fixable.filter((i) => i.fix.approx).length;
+      html += '<div class="notice">' + I.info + '<div class="grow">' + fixable.length + ' ' + plural(fixable.length, 'нарушение можно', 'нарушения можно', 'нарушений можно') + ' исправить автоматически — привязать к токенам и стилям ДС.' +
+        (approxN ? ' Из них ' + approxN + ' — к ближайшему значению.' : '') + '</div>' +
+        '<button class="btn ghost sm" data-act="fix-all"' + (S.fixing ? ' disabled' : '') + '>' + (S.fixing ? 'Исправляю…' : 'Исправить') + '</button></div>';
+    }
+
+    // groups by rule
+    const groups = {};
+    list.forEach((i) => { (groups[i.rule] = groups[i.rule] || []).push(i); });
+    const order = S.rules.map((x) => x.id).filter((id) => groups[id]);
+    order.sort((a, b) => SEV_ORDER[groups[a][0].sev] - SEV_ORDER[groups[b][0].sev]);
+    html += order.map((id) => viewGroup(id, groups[id])).join('');
+    return html;
+  }
+
+  function stat(sev, n, label) {
+    return '<button class="stat ' + sev + '" data-act="sev" data-v="' + sev + '" aria-pressed="' + (S.sevFilter === sev) + '"' + (n ? '' : ' disabled') + '>' +
+      '<div class="num">' + fmt(n) + '</div><div class="lbl">' + label + '</div></button>';
+  }
+
+  function viewGroup(ruleId, items) {
+    const rule = S.rules.find((x) => x.id === ruleId);
+    const open = !!S.open[ruleId];
+    const sev = items[0].sev;
+    let html = '<section class="group" data-open="' + open + '">' +
+      '<button class="group-head" data-act="toggle" data-v="' + ruleId + '" aria-expanded="' + open + '">' +
+        '<span class="sev-dot ' + sev + '" aria-label="' + SEV[sev] + '"></span>' +
+        '<span class="group-title">' + esc(rule.title) + '</span>' +
+        '<span class="count">' + items.length + '</span>' +
+        '<span class="chev">' + I.chev + '</span>' +
+      '</button>';
+    if (open) {
+      const fixable = items.filter((i) => i.fix && !S.fixed[i.id]);
+      html += '<div class="group-body"><div class="group-hint"><div class="grow">' + esc(rule.hint) + '</div>' +
+        (fixable.length > 1 ? '<button class="btn ghost sm" data-act="fix-group" data-v="' + ruleId + '"' + (S.fixing ? ' disabled' : '') + '>Исправить ' + fixable.length + '</button>' : '') +
+      '</div>';
+      const lim = S.limit[ruleId] || 50;
+      html += items.slice(0, lim).map(viewRow).join('');
+      if (items.length > lim) html += '<button class="more" data-act="more" data-v="' + ruleId + '">Показать ещё ' + Math.min(50, items.length - lim) + ' из ' + (items.length - lim) + '</button>';
+      html += '</div>';
+    }
+    return html + '</section>';
+  }
+
+  function viewRow(i) {
+    const done = !!S.fixed[i.id];
+    const ctxTag = i.ctx === 'override' ? '<span class="tag">в инстансе</span>' : i.ctx === 'slot' ? '<span class="tag">в слоте</span>' : '';
+    let val = (i.prop ? esc(i.prop) + ': ' : '') +
+      (i.swatch ? '<span class="swatch" style="background:' + esc(i.swatch) + '"></span>' : '') +
+      '<b>' + esc(i.value) + '</b>';
+    const sub = [];
+    if (i.note) sub.push('<span>' + esc(i.note) + '</span>');
+    if (i.fix && i.fix.options && !done) {
+      // Несколько подходящих токенов с одинаковым значением — даём выбрать, по умолчанию первый.
+      sub.push('<span class="arrow">→</span><select class="select xs" data-change="fix-opt" data-v="' + i.id + '" aria-label="Токен для исправления">' +
+        i.fix.options.map((o) => '<option value="' + esc(o.key) + '"' + (o.key === i.fix.key ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('') +
+      '</select>');
+    } else if (i.suggest && i.suggest.length) {
+      sub.push('<span class="arrow">→ ' + esc(i.suggest.join(' / ')) + '</span>');
+      if (!i.fix && i.suggest.length > 1) sub.push('<span>несколько вариантов — выберите вручную</span>');
+    }
+    if (i.fix && i.fix.partial) sub.push('<span>исправится частично</span>');
+    if (i.fix && i.fix.approx) sub.push('<span class="approx">ближайшее значение — проверьте вёрстку</span>');
+    let act = '';
+    if (done) act = '<span class="done-mark">' + I.check + 'Готово</span>';
+    else if (i.fix) act = '<button class="btn ghost sm" data-act="fix-one" data-v="' + i.id + '"' + (S.fixing ? ' disabled' : '') + '>Исправить</button>';
+    return '<div class="row' + (done ? ' done' : '') + '" data-act="select" data-v="' + esc(i.nodeId) + '" title="Показать слой на холсте">' +
+      '<div class="row-main">' +
+        '<div class="row-name"><span class="t">' + esc(i.nodeName || 'Без имени') + '</span>' + ctxTag + '</div>' +
+        (i.path ? '<div class="row-path">' + esc(i.path) + '</div>' : '') +
+        '<div class="row-val">' + val + '</div>' +
+        (sub.length ? '<div class="row-sub">' + sub.join('') + '</div>' : '') +
+      '</div>' +
+      '<div class="row-act">' + act + '</div>' +
+    '</div>';
+  }
+
+  // ----- profiles list -----
+  function viewProfiles() {
+    const ps = profiles();
+    const active = activeProfile();
+    let html = '';
+    if (!ps.length) {
+      html += '<section class="card empty"><div class="badge">' + I.layers + '</div><h3>Профилей пока нет</h3>' +
+        '<p>Создайте профиль для каждого проекта и платформы: ИБ Web, ИБ iOS, Mobile Android…</p></section>';
+    } else {
+      html += '<div class="plist">' + ps.map((p) => {
+        const plat = (PLATFORMS.find((x) => x[0] === p.platform) || PLATFORMS[3])[1];
+        return '<button class="pcard" data-act="edit-profile" data-id="' + p.id + '">' +
+          '<div class="grow"><div class="name">' + esc(p.name) + ' <span class="ptag">' + plat + '</span>' +
+            (active && active.id === p.id ? '<span class="faint" style="font-size:11px;font-weight:400">· активный</span>' : '') + '</div>' +
+          '<div class="sub">' + esc(sourceSummary(p)) + '</div></div>' +
+          '<span class="faint">' + I.right + '</span></button>';
+      }).join('') + '</div>';
+    }
+    html += '<div class="btn-row"><button class="btn primary" data-act="new-profile">' + I.plus + 'Новый профиль</button>' +
+      '<button class="btn secondary" data-act="import">Импорт</button></div>';
+    return html;
+  }
+
+  // ----- profile edit -----
+  function viewProfile() {
+    const p = editProfile();
+    if (!p) { S.view = 'profiles'; return viewProfiles(); }
+    let html = '<button class="back" data-act="back">' + I.back + 'Профили</button>';
+
+    html += '<section class="card"><h2 class="card-title">Основное</h2>' +
+      '<div class="field"><label class="label" for="pname">Название</label>' +
+        '<input id="pname" class="input" data-input="name" value="' + esc(p.name) + '" placeholder="Например, ИБ · Web"></div>' +
+      '<div class="field"><span class="label">Платформа</span><div class="seg" role="group">' +
+        PLATFORMS.map((x) => '<button data-act="platform" data-v="' + x[0] + '" aria-pressed="' + (p.platform === x[0]) + '">' + x[1] + '</button>').join('') +
+      '</div></div></section>';
+
+    // sources
+    html += '<section class="card"><h2 class="card-title">Источники <span class="muted">' + (p.sources || []).length + '</span></h2>';
+    if (!(p.sources || []).length) {
+      html += '<p class="hint" style="margin:0 0 12px">Добавьте файл с токенами и файл с компонентами ДС. Если они лежат в одном файле — достаточно одного источника.</p>';
+    }
+    html += (p.sources || []).map((s) => viewSource(p, s)).join('');
+    if (S.addOpen) html += viewAddSource(p);
+    else html += '<button class="btn secondary block" data-act="add-open">' + I.plus + 'Добавить источник</button>';
+    html += '</section>';
+
+    // rules
+    const rules = Object.assign({}, p.rules || {});
+    html += '<section class="card"><h2 class="card-title">Правила</h2>';
+    S.cats.forEach((c) => {
+      const rs = S.rules.filter((r) => r.cat === c.id);
+      html += '<div class="rule-cat">' + esc(c.title) + '</div>' + rs.map((r) => {
+        const v = rules[r.id] || r.sev;
+        return '<div class="rule"><div class="grow"><div class="t">' + esc(r.title) + '</div><div class="d">' + esc(r.hint) + '</div></div>' +
+          '<select class="select sm" data-change="rule" data-v="' + r.id + '" aria-label="Уровень для правила ' + esc(r.title) + '">' +
+            ['error', 'warning', 'info', 'off'].map((sv) => '<option value="' + sv + '"' + (v === sv ? ' selected' : '') + '>' + SEV[sv] + '</option>').join('') +
+          '</select></div>';
+      }).join('');
+    });
+    html += '</section>';
+
+    // ignore
+    html += '<section class="card"><h2 class="card-title">Исключения</h2>' +
+      '<textarea class="textarea" data-input="ignore" placeholder="Card&#10;Детали платежа&#10;Третье лицо&#10;_draft*">' + esc((p.ignore || []).join('\n')) + '</textarea>' +
+      '<p class="hint">Имена слоёв и компонентов, по одному в строке. Их не проверяют правила «Отвязанный», «Локальный» и «Компонент не из ДС». Звёздочка — любой текст.</p></section>';
+
+    html += '<section class="card"><div class="btn-row"><button class="btn secondary" data-act="export">Экспорт профиля</button>' +
+      '<button class="btn danger" data-act="delete-profile">' + I.trash + (S.confirm === 'profile' ? 'Точно удалить?' : 'Удалить') + '</button></div>' +
+      '<p class="hint">Экспорт — JSON, который коллега импортирует у себя. Источники и правила переносятся целиком.</p></section>';
+    return html;
+  }
+
+  function viewSource(p, s) {
+    const vars = (s.variables || []).length, colls = (s.collections || []).length, styles = (s.styles || []).length, comps = (s.components || []).length;
+    const facts = [];
+    if (colls) facts.push('<span class="fact"><b>' + colls + '</b> ' + plural(colls, 'коллекция', 'коллекции', 'коллекций') + '</span>');
+    if (vars) facts.push('<span class="fact"><b>' + fmt(vars) + '</b> ' + plural(vars, 'переменная', 'переменные', 'переменных') + '</span>');
+    if (styles) facts.push('<span class="fact"><b>' + styles + '</b> ' + plural(styles, 'стиль', 'стиля', 'стилей') + '</span>');
+    if (comps) facts.push('<span class="fact"><b>' + fmt(comps) + '</b> ' + plural(comps, 'компонент', 'компонента', 'компонентов') + '</span>');
+    if (!facts.length) facts.push('<span class="fact">пусто</span>');
+    const busy = S.syncing === s.id;
+    return '<div class="src"><div class="grow">' +
+      '<div class="name" title="' + esc(s.name) + '">' + esc(s.name) + '</div>' +
+      '<div class="facts">' + facts.join('') + '</div>' +
+      '<div class="when">' + (busy ? esc(S.syncText || 'Обновляю…') : 'Обновлено ' + fmtDate(s.syncedAt) + ' · ' + (s.via === 'rest' ? 'по ссылке' : 'из файла')) +
+        (s.warnings && s.warnings.length ? '<br><span style="color:var(--warning)">' + esc(s.warnings.join(' ')) + '</span>' : '') + '</div>' +
+    '</div><div class="acts">' +
+      '<button class="icon-btn" data-act="src-refresh" data-v="' + s.id + '" title="Обновить" aria-label="Обновить источник"' + (S.syncing ? ' disabled' : '') + '>' + (busy ? '<span class="spinner"></span>' : I.refresh) + '</button>' +
+      (S.confirm === 'src' + s.id
+        ? '<button class="btn danger sm" data-act="src-remove" data-v="' + s.id + '">Удалить?</button>'
+        : '<button class="icon-btn" data-act="src-remove" data-v="' + s.id + '" title="Удалить" aria-label="Удалить источник">' + I.trash + '</button>') +
+    '</div></div>';
+  }
+
+  function viewAddSource(p) {
+    const hasToken = !!(S.data.settings && S.data.settings.token);
+    const busyFile = S.syncing === 'file', busyLink = S.syncing === 'link';
+    return '<div class="add-src">' +
+      '<div class="opt"><div class="opt-title">Текущий файл</div>' +
+        '<p class="hint" style="margin:0 0 10px">Откройте файл токенов или ДС и запустите плагин в нём. Сейчас открыт «' + esc(S.file.name) + '».</p>' +
+        (busyFile
+          ? '<div class="sync-row"><span class="spinner"></span><span class="grow">' + esc(S.syncText || 'Читаю файл…') + '</span>' +
+            '<button class="btn ghost sm" data-act="cancel-sync">Остановить</button></div>'
+          : '<button class="btn secondary block" data-act="sync-file"' + (S.syncing ? ' disabled' : '') + '>Добавить «' + esc(S.file.name) + '»</button>') +
+        '</div>' +
+      '<div class="opt"><div class="opt-title">По ссылке</div>' +
+        '<p class="hint" style="margin:0 0 10px">Если файл ДС открыть нельзя или он только для просмотра. Нужен личный токен Figma со скоупами <b>file_content:read</b>, <b>file_variables:read</b>, <b>library_content:read</b>.</p>' +
+        '<div class="field"><input class="input" data-input="link" value="' + esc(S.link) + '" placeholder="https://www.figma.com/design/…" aria-label="Ссылка на файл"></div>' +
+        (hasToken
+          ? '<p class="hint" style="margin:-4px 0 10px">Токен сохранён на этом компьютере. <button class="btn ghost sm" style="height:22px;padding:0 4px" data-act="token-reset">Сбросить</button></p>'
+          : '<div class="field"><input class="input" type="password" data-input="token" value="' + esc(S.tokenDraft) + '" placeholder="Personal access token" aria-label="Токен Figma"></div>') +
+        '<button class="btn secondary block" data-act="sync-link"' + (S.syncing ? ' disabled' : '') + '>' +
+          (busyLink ? '<span class="spinner"></span>' + esc(S.syncText || 'Загружаю…') : 'Загрузить по ссылке') + '</button></div>' +
+      '<div class="opt" style="padding:8px 12px"><button class="btn ghost sm" data-act="add-close">Отмена</button></div>' +
+    '</div>';
+  }
+
+  function viewSheet() {
+    const sh = S.sheet;
+    const isExport = sh.kind === 'export';
+    return '<div class="sheet-wrap" data-act="sheet-close-bg"><div class="sheet" role="dialog" aria-modal="true">' +
+      '<h2 class="card-title">' + (isExport ? 'Экспорт профиля' : 'Импорт профиля') + '</h2>' +
+      '<textarea class="textarea" id="sheet-text" ' + (isExport ? 'readonly' : 'placeholder="Вставьте JSON профиля"') + '>' + esc(sh.text || '') + '</textarea>' +
+      '<div class="btn-row" style="margin-top:12px">' +
+        '<button class="btn secondary" data-act="sheet-close">Закрыть</button>' +
+        (isExport ? '<button class="btn primary" data-act="copy">Скопировать</button>' : '<button class="btn primary" data-act="import-apply">Импортировать</button>') +
+      '</div></div></div>';
+  }
+
+  // ---------- actions ----------
+  function setTab(t) {
+    S.tab = t;
+    S.view = t === 'check' ? 'check' : 'profiles';
+    S.addOpen = false;
+    render();
+  }
+
+  function newProfile() {
+    const p = { id: uid(), name: 'Новый профиль', platform: 'web', sources: [], rules: {}, ignore: [] };
+    S.data.profiles.push(p);
+    S.data.activeProfileId = p.id;
+    persist();
+    S.tab = 'profiles'; S.view = 'profile'; S.editId = p.id; S.addOpen = true;
+    render();
+    const input = document.getElementById('pname');
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function upsertSource(profileId, source) {
+    const p = profiles().find((x) => x.id === profileId);
+    if (!p) return;
+    const idx = p.sources.findIndex((s) => (source.fileKey && s.fileKey === source.fileKey) || s.id === source.id || (!source.fileKey && s.name === source.name));
+    if (idx >= 0) { source.id = p.sources[idx].id; p.sources[idx] = source; }
+    else { source.id = uid(); p.sources.push(source); }
+    persist();
+  }
+
+  function fixIssues(list) {
+    const todo = list.filter((i) => i.fix && !S.fixed[i.id]);
+    if (!todo.length) return;
+    S.fixing = true;
+    render();
+    send('fix', { issues: todo.map((i) => ({ id: i.id, nodeId: i.nodeId, fix: i.fix })) });
+  }
+
+  // ---------- REST ----------
+  function parseFileKey(url) {
+    const m = String(url).match(/figma\.com\/(?:design|file)\/([A-Za-z0-9]+)(?:\/[^/?#]*)?(?:\/branch\/([A-Za-z0-9]+))?/);
+    if (!m) return null;
+    const b = String(url).match(/\/branch\/([A-Za-z0-9]+)/);
+    return b ? b[1] : m[1];
+  }
+
+  async function api(path, token) {
+    const r = await fetch('https://api.figma.com' + path, { headers: { 'X-Figma-Token': token } });
+    if (!r.ok) {
+      let msg = '';
+      try { msg = (await r.json()).message || ''; } catch (e) { /* no body */ }
+      const err = new Error(r.status + (msg ? ' — ' + msg : ''));
+      err.status = r.status;
+      throw err;
+    }
+    return r.json();
+  }
+
+  function hex2(n) { const s = Math.round(Math.max(0, Math.min(1, n)) * 255).toString(16); return s.length === 1 ? '0' + s : s; }
+  function colorHex(c) { const a = c.a === undefined ? 1 : c.a; return '#' + hex2(c.r) + hex2(c.g) + hex2(c.b) + (a < 0.999 ? hex2(a) : ''); }
+
+  async function fetchSource(key, token) {
+    S.syncText = 'Загружаю файл'; render();
+    const res = await Promise.allSettled([
+      api('/v1/files/' + key + '?depth=1', token),
+      api('/v1/files/' + key + '/variables/local', token),
+      api('/v1/files/' + key + '/styles', token),
+      api('/v1/files/' + key + '/component_sets', token),
+      api('/v1/files/' + key + '/components', token)
+    ]);
+    if (res[0].status === 'rejected') {
+      const e = res[0].reason;
+      if (e.status === 403) throw new Error('Нет доступа к файлу: проверьте токен и права на файл.');
+      if (e.status === 404) throw new Error('Файл не найден. Проверьте ссылку.');
+      throw e;
+    }
+    const warnings = [];
+    const out = { name: res[0].value.name, fileKey: key, via: 'rest', syncedAt: Date.now(), collections: [], variables: [], styles: [], components: [], warnings };
+
+    if (res[1].status === 'fulfilled') {
+      const meta = res[1].value.meta || {};
+      const vars = meta.variables || {}, colls = meta.variableCollections || {};
+      const resolve = (v, modeId, depth) => {
+        if (!v || depth > 8) return null;
+        const c = colls[v.variableCollectionId];
+        let val = v.valuesByMode[modeId];
+        if (val === undefined && c) val = v.valuesByMode[c.defaultModeId];
+        if (val && typeof val === 'object' && val.type === 'VARIABLE_ALIAS') {
+          const t = vars[val.id]; if (!t) return null;
+          const tc = colls[t.variableCollectionId];
+          return resolve(t, t.valuesByMode[modeId] !== undefined ? modeId : (tc ? tc.defaultModeId : modeId), depth + 1);
+        }
+        if (val && typeof val === 'object' && 'r' in val) return colorHex(val);
+        return typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean' ? val : null;
+      };
+      Object.keys(colls).forEach((id) => {
+        const c = colls[id];
+        if (c.remote) return;
+        out.collections.push({ key: c.key, name: c.name, modes: (c.modes || []).map((m) => m.name) });
+      });
+      Object.keys(vars).forEach((id) => {
+        const v = vars[id];
+        if (v.remote) return;
+        const c = colls[v.variableCollectionId];
+        if (!c) return;
+        out.variables.push({ key: v.key, name: v.name, collectionKey: c.key, type: v.resolvedType, scopes: v.scopes || [], hidden: !!v.hiddenFromPublishing, value: resolve(v, c.defaultModeId, 0) });
+      });
+    } else {
+      warnings.push('Переменные не загружены (' + res[1].reason.message + '): нужен Enterprise и скоуп file_variables:read.');
+    }
+    if (res[2].status === 'fulfilled') {
+      const metaStyles = (res[2].value.meta || {}).styles || [];
+      out.styles = metaStyles.map((s) => ({ key: s.key, name: s.name, type: s.style_type }));
+      // Параметры текстовых стилей (шрифт, насыщенность, размер) — для подбора стиля к тексту.
+      const textMeta = metaStyles.filter((s) => s.style_type === 'TEXT' && s.node_id);
+      try {
+        for (let i = 0; i < textMeta.length; i += 50) {
+          S.syncText = 'Читаю текстовые стили'; render();
+          const chunk = textMeta.slice(i, i + 50);
+          const nodes = (await api('/v1/files/' + key + '/nodes?ids=' + encodeURIComponent(chunk.map((s) => s.node_id).join(',')), token)).nodes || {};
+          chunk.forEach((m) => {
+            const n = nodes[m.node_id];
+            const st = n && n.document && n.document.style;
+            const target = out.styles.find((x) => x.key === m.key);
+            if (st && target) { target.family = st.fontFamily; target.weight = st.fontWeight; target.size = st.fontSize; }
+          });
+        }
+      } catch (e) {
+        warnings.push('Параметры текстовых стилей не загружены — подбор стиля для текста будет недоступен.');
+      }
+    } else warnings.push('Стили не загружены (' + res[2].reason.message + ').');
+    if (res[3].status === 'fulfilled') {
+      ((res[3].value.meta || {}).component_sets || []).forEach((c) => out.components.push({ key: c.key, name: c.name, set: true }));
+    } else warnings.push('Наборы компонентов не загружены (' + res[3].reason.message + ').');
+    if (res[4].status === 'fulfilled') {
+      ((res[4].value.meta || {}).components || []).forEach((c) => {
+        const inSet = c.containing_frame && c.containing_frame.containingStateGroup;
+        if (!inSet) out.components.push({ key: c.key, name: c.name, set: false });
+      });
+    } else warnings.push('Компоненты не загружены (' + res[4].reason.message + ').');
+    if (!out.collections.length && !out.styles.length && !out.components.length) {
+      warnings.push('В файле не нашлось опубликованных токенов, стилей или компонентов.');
+    }
+    return out;
+  }
+
+  async function syncLink(existing) {
+    const p = editProfile();
+    let token = S.data.settings.token;
+    if (!token && S.tokenDraft.trim()) {
+      token = S.tokenDraft.trim();
+      S.data.settings.token = token;
+      S.tokenDraft = '';
+      persist();
+    }
+    if (!token) { toast('Введите токен Figma'); return; }
+    const key = existing ? existing.fileKey : parseFileKey(S.link);
+    if (!key) { toast('Не похоже на ссылку на файл Figma'); return; }
+    S.syncing = existing ? existing.id : 'link';
+    render();
+    try {
+      const src = await fetchSource(key, token);
+      if (existing) src.id = existing.id;
+      upsertSource(p.id, src);
+      S.link = '';
+      S.addOpen = false;
+      toast('«' + src.name + '» добавлен в профиль');
+    } catch (e) {
+      toast(e.message || String(e));
+    } finally {
+      S.syncing = null; S.syncText = '';
+      render();
+    }
+  }
+
+  // ---------- events ----------
+  app.addEventListener('click', (e) => {
+    if (e.target.closest('select')) return;
+    const el = e.target.closest('[data-act]');
+    if (!el || el.disabled) return;
+    const act = el.dataset.act, v = el.dataset.v;
+
+    if (S.confirm && act !== 'src-remove' && act !== 'delete-profile') S.confirm = null;
+    if (act === 'sheet-close-bg') { if (e.target === el) { S.sheet = null; render(); } return; }
+
+    switch (act) {
+      case 'tab': setTab(v); break;
+      case 'run': {
+        const p = activeProfile();
+        S.running = true; S.progress = 0; S.result = null; S.fixed = {}; S.open = {}; S.limit = {}; S.sevFilter = null; S.catFilter = null;
+        render();
+        send('check', { profileId: p.id });
+        break;
+      }
+      case 'cancel': send('cancel'); break;
+      case 'sev': S.sevFilter = S.sevFilter === v ? null : v; S.catFilter = null; render(); break;
+      case 'cat': S.catFilter = v || null; render(); break;
+      case 'toggle': S.open[v] = !S.open[v]; render(); break;
+      case 'more': S.limit[v] = (S.limit[v] || 50) + 50; render(); break;
+      case 'select': send('select', { nodeId: v }); break;
+      case 'fix-one': e.stopPropagation(); fixIssues(S.result.issues.filter((i) => i.id === v)); break;
+      case 'fix-group': fixIssues(filtered().filter((i) => i.rule === v)); break;
+      case 'fix-all': fixIssues(filtered()); break;
+
+      case 'new-profile': newProfile(); break;
+      case 'edit-profile': S.tab = 'profiles'; S.view = 'profile'; S.editId = el.dataset.id; S.addOpen = false; render(); break;
+      case 'back': S.view = 'profiles'; S.addOpen = false; render(); break;
+      case 'platform': editProfile().platform = v; persist(); render(); break;
+      case 'add-open': S.addOpen = true; render(); break;
+      case 'add-close': S.addOpen = false; render(); break;
+      case 'sync-file': S.syncing = 'file'; S.syncText = ''; render(); send('sync-file', { profileId: S.editId }); break;
+      case 'sync-link': syncLink(null); break;
+      case 'cancel-sync': send('cancel-sync'); S.syncText = 'Останавливаю…'; render(); break;
+      case 'token-reset': S.data.settings.token = ''; persist(); render(); break;
+      case 'src-refresh': {
+        const p = editProfile();
+        const s = p.sources.find((x) => x.id === v);
+        if (s.via === 'rest') { syncLink(s); break; }
+        const same = (s.fileKey && s.fileKey === S.file.key) || s.name === S.file.name;
+        if (!same) { toast('Откройте файл «' + s.name + '» и обновите источник там, или добавьте его по ссылке.'); break; }
+        S.syncing = s.id; render(); send('sync-file', { profileId: p.id });
+        break;
+      }
+      case 'src-remove': {
+        const p = editProfile();
+        const s = p.sources.find((x) => x.id === v);
+        if (S.confirm !== 'src' + v) { S.confirm = 'src' + v; render(); break; }
+        S.confirm = null;
+        p.sources = p.sources.filter((x) => x.id !== v);
+        persist(); render();
+        break;
+      }
+      case 'delete-profile': {
+        const p = editProfile();
+        if (S.confirm !== 'profile') { S.confirm = 'profile'; render(); break; }
+        S.confirm = null;
+        S.data.profiles = profiles().filter((x) => x.id !== p.id);
+        if (S.data.activeProfileId === p.id) S.data.activeProfileId = S.data.profiles[0] ? S.data.profiles[0].id : null;
+        persist(); S.view = 'profiles'; render();
+        break;
+      }
+      case 'export': {
+        const p = JSON.parse(JSON.stringify(editProfile()));
+        S.sheet = { kind: 'export', text: JSON.stringify({ format: 'forte-ds-check/profile@1', profile: p }) };
+        render();
+        break;
+      }
+      case 'import': S.sheet = { kind: 'import', text: '' }; render(); break;
+      case 'sheet-close': S.sheet = null; render(); break;
+      case 'copy': {
+        const ta = document.getElementById('sheet-text');
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+        toast(ok ? 'Скопировано' : 'Выделите текст и скопируйте вручную');
+        break;
+      }
+      case 'import-apply': {
+        const text = document.getElementById('sheet-text').value;
+        try {
+          const obj = JSON.parse(text);
+          const p = obj && obj.profile ? obj.profile : obj;
+          if (!p || !p.name || !Array.isArray(p.sources)) throw new Error('bad');
+          p.id = uid();
+          p.rules = p.rules || {}; p.ignore = p.ignore || [];
+          S.data.profiles.push(p);
+          S.data.activeProfileId = p.id;
+          persist();
+          S.sheet = null; S.view = 'profile'; S.editId = p.id;
+          render();
+          toast('Профиль «' + p.name + '» импортирован');
+        } catch (err) {
+          toast('Не получилось прочитать JSON профиля');
+        }
+        break;
+      }
+    }
+  });
+
+  app.addEventListener('change', (e) => {
+    const el = e.target;
+    const ch = el.dataset.change;
+    if (ch === 'profile') { S.data.activeProfileId = el.value; S.result = null; persist(); render(); }
+    if (ch === 'fix-opt') {
+      const it = S.result.issues.find((x) => x.id === el.dataset.v);
+      const o = it.fix.options.find((x) => x.key === el.value);
+      it.fix.key = o.key; it.fix.name = o.name;
+      return;
+    }
+    if (ch === 'rule') { const p = editProfile(); p.rules = p.rules || {}; p.rules[el.dataset.v] = el.value; persist(); }
+    if (el.dataset.input === 'name' || el.dataset.input === 'ignore') render();
+  });
+
+  app.addEventListener('input', (e) => {
+    const el = e.target;
+    const k = el.dataset.input;
+    if (!k) return;
+    if (k === 'name') { editProfile().name = el.value; persist(); }
+    if (k === 'ignore') { editProfile().ignore = el.value.split('\n').map((x) => x.trim()).filter(Boolean); persist(); }
+    if (k === 'link') S.link = el.value;
+    if (k === 'token') S.tokenDraft = el.value;
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && S.sheet) { S.sheet = null; render(); }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && S.view === 'check' && !S.running) {
+      const b = app.querySelector('[data-act="run"]');
+      if (b && !b.disabled) b.click();
+    }
+  });
+
+  // ---------- messages from code.js ----------
+  window.onmessage = (ev) => {
+    const m = ev.data && ev.data.pluginMessage;
+    if (!m) return;
+    switch (m.type) {
+      case 'init':
+        S.data = m.state; S.rules = m.rules; S.cats = m.cats; S.file = m.file; S.ready = true;
+        if (!S.data.profiles.length) { S.tab = 'check'; S.view = 'check'; }
+        render();
+        break;
+      case 'file':
+        S.file = m.file;
+        if (!S.running) render();
+        break;
+      case 'thumb':
+        if (S.thumb) URL.revokeObjectURL(S.thumb.url);
+        S.thumb = { id: m.id, url: URL.createObjectURL(new Blob([m.bytes], { type: 'image/png' })) };
+        if (!S.running) render();
+        break;
+      case 'check-progress': S.progress = m.count; render(); break;
+      case 'check-done': S.running = false; S.result = m.result; autoOpen(); render(); break;
+      case 'check-error': S.running = false; render(); toast(m.message); break;
+      case 'sync-progress': S.syncText = m.text; render(); break;
+      case 'sync-done':
+        upsertSource(m.profileId, m.source);
+        S.syncing = null; S.syncText = ''; S.addOpen = false;
+        render();
+        toast('«' + m.source.name + '» синхронизирован');
+        break;
+      case 'fix-done':
+        m.fixed.forEach((id) => { S.fixed[id] = true; });
+        S.fixing = false;
+        render();
+        toast(m.failed.length
+          ? 'Исправлено ' + m.fixed.length + ', не удалось ' + m.failed.length + ': ' + m.failed[0].reason
+          : 'Исправлено ' + m.fixed.length);
+        break;
+      case 'sync-cancelled': S.syncing = null; S.syncText = ''; render(); toast('Синхронизация остановлена'); break;
+      case 'toast': toast(m.text); break;
+      case 'error':
+        S.running = false; S.syncing = null; S.fixing = false;
+        render();
+        toast('Ошибка: ' + m.message);
+        break;
+    }
+  };
+
+  function autoOpen() {
+    const r = S.result;
+    if (!r || !r.issues.length) return;
+    const counts = {};
+    r.issues.forEach((i) => { counts[i.rule] = (counts[i.rule] || 0) + 1; });
+    const ids = Object.keys(counts);
+    if (ids.length <= 2) ids.forEach((id) => { S.open[id] = true; });
+  }
+
+  render();
+  send('init');
+})();
+</script>
+</body>
+</html>

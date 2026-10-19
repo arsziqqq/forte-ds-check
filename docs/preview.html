@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Forte DS Check — превью UI</title>
+<style>
+  body { margin: 0; background: #2c2c2c; font: 12px -apple-system, sans-serif; color: #ddd; display: flex; gap: 24px; padding: 24px; align-items: flex-start; }
+  .frame { width: 400px; height: 680px; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.5); background: #fff; flex: none; }
+  iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .panel { display: flex; flex-direction: column; gap: 8px; }
+  button { background: #3c3c3c; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { background: #4a4a4a; }
+  code { color: #9cf; }
+</style>
+</head>
+<body>
+<div class="frame"><iframe id="ui" src="../ui.html"></iframe></div>
+<div class="panel">
+  <b>Мок Figma</b>
+  <button data-a="light">Светлая тема</button>
+  <button data-a="dark">Тёмная тема</button>
+  <button data-a="sel0">Снять выделение</button>
+  <button data-a="sel1">Выделить 1 фрейм</button>
+  <button data-a="sel3">Выделить 3 фрейма</button>
+  <button data-a="empty">Сбросить профили</button>
+  <button data-a="clean">Следующая проверка — без нарушений</button>
+  <p>Лог сообщений UI → code.js:</p>
+  <pre id="log" style="max-width:420px;white-space:pre-wrap;color:#9a9"></pre>
+</div>
+<script>
+const ui = document.getElementById('ui');
+const log = document.getElementById('log');
+const toUI = (m) => ui.contentWindow.postMessage({ pluginMessage: m }, '*');
+
+const RULES = [
+  { id: 'color.hardcoded', cat: 'color', sev: 'error', title: 'Цвет без токена', hint: 'Заливка или обводка задана HEX-значением, а не переменной из библиотеки токенов.' },
+  { id: 'gradient.nostyle', cat: 'color', sev: 'warning', title: 'Градиент без стиля', hint: 'Градиенты берутся только из стилей библиотеки.' },
+  { id: 'text.nostyle', cat: 'text', sev: 'error', title: 'Текст без стиля', hint: 'К тексту не применён текстовый стиль из библиотеки.' },
+  { id: 'spacing.unbound', cat: 'layout', sev: 'warning', title: 'Отступ без переменной', hint: 'Padding или gap в auto layout задан числом, а не переменной.' },
+  { id: 'radius.unbound', cat: 'layout', sev: 'warning', title: 'Радиус без переменной', hint: 'Скругление задано числом, а не переменной.' },
+  { id: 'effect.nostyle', cat: 'effect', sev: 'warning', title: 'Эффект без стиля', hint: 'Тень или размытие заданы вручную, а не стилем эффекта.' },
+  { id: 'token.foreign', cat: 'library', sev: 'error', title: 'Переменная из чужой библиотеки', hint: 'Переменная не входит в источники профиля. Часто это токены другой платформы или старой библиотеки.' },
+  { id: 'style.foreign', cat: 'library', sev: 'error', title: 'Стиль из чужой библиотеки', hint: 'Стиль не входит в источники профиля или создан локально в файле.' },
+  { id: 'token.scope', cat: 'library', sev: 'warning', title: 'Переменная не по назначению', hint: 'Скоуп переменной не разрешает это свойство. Например, отступ использован как радиус.' },
+  { id: 'library.outdated', cat: 'library', sev: 'info', title: 'Устаревшая версия библиотеки', hint: 'Такой переменной нет в последней синхронизации источника. Обновите библиотеку в файле.' },
+  { id: 'component.foreign', cat: 'component', sev: 'error', title: 'Компонент не из ДС', hint: 'Инстанс компонента из библиотеки, которой нет в профиле.' },
+  { id: 'component.local', cat: 'component', sev: 'warning', title: 'Локальный компонент', hint: 'Компонент создан в этом файле, а не взят из ДС.' },
+  { id: 'component.detached', cat: 'component', sev: 'warning', title: 'Отвязанный компонент', hint: 'Фрейм был инстансом компонента и его отвязали (detach).' },
+  { id: 'slot.limits', cat: 'component', sev: 'warning', title: 'Нарушены настройки слота', hint: 'Содержимое слота не соответствует настройкам компонента.' },
+  { id: 'naming.default', cat: 'naming', sev: 'off', title: 'Слой с именем по умолчанию', hint: 'Frame 12, Group 3, Rectangle 5 и т.п. Проверяются только свои слои и содержимое слотов — слои внутри компонентов ДС не трогаем. По умолчанию выключено.' }
+];
+const CATS = [{ id: 'color', title: 'Цвет' }, { id: 'text', title: 'Текст' }, { id: 'layout', title: 'Отступы' }, { id: 'effect', title: 'Эффекты' }, { id: 'library', title: 'Библиотеки' }, { id: 'component', title: 'Компоненты' }, { id: 'naming', title: 'Нейминг' }];
+
+const fill = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+let state = {
+  version: 1, activeProfileId: 'p1', settings: { token: '' },
+  profiles: [{
+    id: 'p1', name: 'ИБ · Web', platform: 'web', rules: {}, ignore: [],
+    sources: [
+      { id: 's1', name: 'Tokens ИБ', fileKey: 'Enxohf5V7g4zYNCiBLdxvp', via: 'file', syncedAt: Date.now() - 3600e3,
+        collections: [{ key: 'a', name: 'Global', modes: ['Mode 1'] }, { key: 'b', name: 'Color Collection', modes: ['Light', 'Dark'] }],
+        variables: fill(159, (i) => ({ key: 'v' + i })), styles: fill(19, (i) => ({ key: 's' + i })), components: [] },
+      { id: 's2', name: 'NEW ИБ Design System', fileKey: 'KDmZleiXqBpEcgVwVwi8hX', via: 'rest', syncedAt: Date.now() - 600e3,
+        collections: [], variables: [], styles: [], components: fill(124, (i) => ({ key: 'c' + i })) }
+    ]
+  }, {
+    id: 'p2', name: 'Mobile · iOS', platform: 'ios', rules: {}, ignore: [], sources: []
+  }]
+};
+const ITEMS = [
+  { id: '7278:121325', name: '1. До расчета - rest', type: 'FRAME', w: 1440, h: 1525 },
+  { id: '7306:415116', name: '1. До расчета - selected', type: 'FRAME', w: 1440, h: 1525 },
+  { id: '7306:414426', name: '1. До расчета - Error', type: 'FRAME', w: 1440, h: 1525 }
+];
+let file = { name: 'Переводы', page: 'Draft', selection: 1, key: '33ZTFhFajzReOr7U20C5b7', items: ITEMS.slice(0, 1) };
+function setSel(n) { file = Object.assign({}, file, { selection: n, items: ITEMS.slice(0, n) }); toUI({ type: 'file', file }); if (n) sendThumb(); }
+// Рисуем упрощённый экран ИБ вместо exportAsync.
+function sendThumb() {
+  const c = document.createElement('canvas'); c.width = 160; c.height = 170;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f8fafc'; g.fillRect(0, 0, 160, 170);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 160, 10); g.fillRect(4, 14, 24, 152);
+  g.fillStyle = '#eef7ff'; g.fillRect(32, 26, 124, 12);
+  g.fillStyle = '#ffffff'; [[32, 42, 124, 22], [32, 68, 124, 10], [32, 82, 124, 68]].forEach((r) => g.fillRect(...r));
+  g.fillStyle = '#e0e9f6'; for (let y = 92; y < 140; y += 9) g.fillRect(36, y, 116, 1);
+  g.fillStyle = '#1464a5'; g.fillRect(124, 155, 32, 7); g.fillRect(6, 4, 14, 3);
+  c.toBlob((b) => b.arrayBuffer().then((buf) => toUI({ type: 'thumb', id: file.items[0].id, bytes: new Uint8Array(buf) })));
+}
+let clean = false;
+let syncStop = false;
+
+let n = 0;
+const I = (o) => Object.assign({ id: 'i' + (n++), ctx: 'own', prop: '', value: '', note: '', suggest: [], fix: null, path: '' }, o);
+function issues() {
+  n = 0;
+  return [
+    I({ rule: 'token.foreign', sev: 'error', nodeId: '1', nodeName: 'Платежная форма', path: '1. До расчета - rest', prop: 'Padding слева', value: 'horizontal/screen-web-margin', note: 'коллекция «Spacing semantic»', suggest: ['Space/6x'], fix: { kind: 'float', fields: [{ field: 'paddingLeft', key: 'k', name: 'Space/6x' }] } }),
+    I({ rule: 'token.foreign', sev: 'error', nodeId: '1', nodeName: 'Платежная форма', path: '1. До расчета - rest', prop: 'Padding сверху', value: 'vertical/screen-web-margin', note: 'коллекция «Spacing semantic»', suggest: ['Space/2x'], fix: { kind: 'float', fields: [{ field: 'paddingTop', key: 'k', name: 'Space/2x' }] } }),
+    I({ rule: 'token.foreign', sev: 'error', nodeId: '1', nodeName: 'Платежная форма', path: '1. До расчета - rest', prop: 'Gap', value: 'horizontal/between-sections', note: 'коллекция «Spacing semantic»', suggest: ['Space/6x'], fix: { kind: 'float', fields: [{ field: 'itemSpacing', key: 'k', name: 'Space/6x' }] } }),
+    I({ rule: 'color.hardcoded', sev: 'error', nodeId: '2', nodeName: 'Amount', path: 'Card / Расчет / Total', prop: 'Заливка', value: '#1464A5', swatch: '#1464a5', suggest: ['Text/Accent'], fix: { kind: 'paint', target: 'fills', index: 0, key: 'k', name: 'Text/Accent' } }),
+    I({ rule: 'color.hardcoded', sev: 'error', nodeId: '3', nodeName: 'Детализация расчета', path: 'таблица / Таблица сотрудников', prop: 'Заливка', value: '#F8FAFC', swatch: '#f8fafc', suggest: ['Background/Secondary'], fix: { kind: 'paint', key: 'bs', name: 'Background/Secondary', options: [{ key: 'bs', name: 'Background/Secondary' }, { key: 'bc', name: 'Background/Card' }] } }),
+    I({ rule: 'component.detached', sev: 'warning', nodeId: '4', nodeName: 'Детали платежа', path: 'Платежная форма / Данные платежа', prop: 'Источник', value: 'компонент из библиотеки' }),
+    I({ rule: 'component.detached', sev: 'warning', nodeId: '5', nodeName: 'Третье лицо', path: 'Платежная форма / Данные платежа', prop: 'Источник', value: 'компонент из библиотеки' }),
+    I({ rule: 'component.detached', sev: 'warning', nodeId: '6', nodeName: 'Card', path: 'Платежная форма / Данные платежа', prop: 'Источник', value: 'компонент из библиотеки' }),
+    I({ rule: 'component.local', sev: 'warning', nodeId: '7', nodeName: 'Header', path: 'Платежная форма / Данные платежа', prop: 'Компонент', value: 'Header', note: 'создан в этом файле' }),
+    I({ rule: 'component.local', sev: 'warning', nodeId: '8', nodeName: 'BTNs', path: 'Платежная форма / Данные платежа', prop: 'Компонент', value: 'BTNs', note: 'создан в этом файле' }),
+    I({ rule: 'spacing.unbound', sev: 'warning', nodeId: '9', nodeName: 'Детали платежа', path: 'Платежная форма / Данные платежа', prop: 'Auto layout', value: 'padding 24 · gap 16', suggest: ['Space/6x', 'Space/4x'], fix: { kind: 'float', fields: [] } }),
+    I({ rule: 'spacing.unbound', sev: 'warning', nodeId: '10', nodeName: 'Основные детали', path: 'Данные платежа / Детали платежа', prop: 'Auto layout', value: 'gap 16', suggest: ['Space/4x'], fix: { kind: 'float', fields: [] } }),
+    I({ rule: 'spacing.unbound', sev: 'warning', nodeId: '11', nodeName: 'Total', path: 'Card / Расчет / Payment Summary', prop: 'Auto layout', value: 'gap 17', suggest: ['Space/4x (17 → 16)'], fix: { kind: 'float', approx: true, fields: [] } }),
+    I({ rule: 'radius.unbound', sev: 'warning', nodeId: '12', nodeName: 'Детали платежа', path: 'Платежная форма / Данные платежа', prop: 'Радиус', value: '16', suggest: ['Radius/4x'], fix: { kind: 'float', fields: [] } }),
+    I({ rule: 'token.scope', sev: 'warning', nodeId: '13', nodeName: 'Buttons', ctx: 'override', path: 'header / Toolbar', prop: 'Радиус', value: 'vertical/between-forms', note: 'скоуп не включает это свойство' }),
+    I({ rule: 'text.nostyle', sev: 'error', nodeId: '14', nodeName: 'Title', ctx: 'slot', path: 'Card / Header', prop: 'Текст', value: 'Open Sans SemiBold 15', suggest: ['Subheadline/Subheadline2 (Open Sans 14)'], fix: { kind: 'textStyle', approx: true } }),
+    I({ rule: 'text.nostyle', sev: 'error', nodeId: '18', nodeName: 'Сумма', path: 'Card / Расчет', prop: 'Текст', value: 'Open Sans Regular 14', suggest: ['Caption/Caption2'], fix: { kind: 'textStyle' } }),
+    I({ rule: 'naming.default', sev: 'warning', nodeId: '16', nodeName: 'Frame 2087331352', path: 'Frame 2087331608', prop: 'Имя', value: 'Frame 2087331352', note: 'frame' }),
+    I({ rule: 'naming.default', sev: 'warning', nodeId: '17', nodeName: 'Rectangle 6276', path: 'Frame 2087331608 / Frame 2087331352', prop: 'Имя', value: 'Rectangle 6276', note: 'rectangle' }),
+    I({ rule: 'library.outdated', sev: 'info', nodeId: '15', nodeName: 'snackbar', ctx: 'override', path: 'Данные платежа', prop: 'Заливка', value: 'State/Tetriary/System', note: 'коллекция «Color Collection»' })
+  ];
+}
+
+const handlers = {
+  'init': () => { toUI({ type: 'init', state, rules: RULES, cats: CATS, file }); if (file.selection) setTimeout(sendThumb, 200); },
+  'save-state': (m) => { state = m.state; },
+  'check': () => {
+    let c = 0;
+    const t = setInterval(() => {
+      c += 120; toUI({ type: 'check-progress', count: c });
+      if (c >= 480) {
+        clearInterval(t);
+        toUI({ type: 'check-done', result: { profileId: 'p1', scope: 'selection', scopeLabel: '1. До расчета - rest', count: 468, instances: 137, overrides: 41, slots: 2, ms: 840, truncated: false, cancelled: false, hasComponents: true, issues: clean ? [] : issues() } });
+      }
+    }, 150);
+  },
+  'fix': (m) => setTimeout(() => toUI({ type: 'fix-done', fixed: m.issues.map((i) => i.id), failed: [] }), 400),
+  'sync-file': (m) => {
+    let page = 0; syncStop = false;
+    const t = setInterval(() => {
+      if (syncStop) { clearInterval(t); toUI({ type: 'sync-cancelled' }); return; }
+      page++; toUI({ type: 'sync-progress', text: 'Компоненты: стр. ' + page + ' из 12' });
+      if (page === 12) { clearInterval(t); toUI({ type: 'sync-done', profileId: m.profileId, source: { name: file.name, fileKey: file.key, via: 'file', syncedAt: Date.now(), collections: [], variables: [], styles: fill(3, (i) => ({ key: 'x' + i })), components: fill(12, (i) => ({ key: 'y' + i })) } }); }
+    }, 400);
+  },
+  'cancel-sync': () => { syncStop = true; },
+  'select': () => {}
+};
+
+window.addEventListener('message', (e) => {
+  const m = e.data && e.data.pluginMessage;
+  if (!m) return;
+  log.textContent = (m.type + (m.type === 'save-state' ? '' : ' ' + JSON.stringify(m).slice(0, 120))) + '\n' + log.textContent.slice(0, 1500);
+  if (handlers[m.type]) handlers[m.type](m);
+});
+
+document.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => {
+  const a = b.dataset.a;
+  const html = ui.contentDocument.documentElement;
+  if (a === 'dark') html.classList.add('figma-dark');
+  if (a === 'light') html.classList.remove('figma-dark');
+  if (a === 'sel0') setSel(0);
+  if (a === 'sel1') setSel(1);
+  if (a === 'sel3') setSel(3);
+  if (a === 'empty') { state.profiles = []; state.activeProfileId = null; ui.contentWindow.location.reload(); }
+  if (a === 'clean') clean = !clean;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "Forte DS Check",
+  "id": "1693891565533707729",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "enablePrivatePluginApi": true,
+  "networkAccess": {
+    "allowedDomains": ["https://api.figma.com"],
+    "reasoning": "Загрузка переменных, стилей и компонентов библиотек по ссылке через Figma REST API"
+  }
+}
