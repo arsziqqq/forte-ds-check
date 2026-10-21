@@ -17,6 +17,7 @@ const RULES = [
   { id: 'style.foreign', cat: 'library', sev: 'error', title: 'Стиль из чужой библиотеки', hint: 'Стиль не входит в источники профиля или создан локально в файле.' },
   { id: 'token.scope', cat: 'library', sev: 'warning', title: 'Переменная не по назначению', hint: 'Скоуп переменной не разрешает это свойство. Например, отступ использован как радиус.' },
   { id: 'library.outdated', cat: 'library', sev: 'info', title: 'Устаревшая версия библиотеки', hint: 'Такой переменной нет в последней синхронизации источника. Обновите библиотеку в файле.' },
+  { id: 'component.broken', cat: 'component', sev: 'error', title: 'Сломанный компонент', hint: 'Главный компонент удалён из файла (в Figma справа «Restore component»). Замените на рабочий компонент — плагин ищет похожий по имени в файле и в ДС — или создайте новый.' },
   { id: 'component.foreign', cat: 'component', sev: 'error', title: 'Компонент не из ДС', hint: 'Инстанс компонента из библиотеки, которой нет в профиле.' },
   { id: 'component.local', cat: 'component', sev: 'warning', title: 'Локальный компонент', hint: 'Компонент создан в этом файле, а не взят из ДС.' },
   { id: 'component.detached', cat: 'component', sev: 'warning', title: 'Отвязанный компонент', hint: 'Фрейм был инстансом компонента и его отвязали (detach).' },
@@ -297,7 +298,7 @@ function buildAllowed(profile) {
       if (typeof st.size === 'number' && st.weight) a.textStyles.push(st);
       else a.textStylesNoDetails = true;
     });
-    (s.components || []).forEach(function (c) { a.components[c.key] = c; a.hasComponents = true; });
+    (s.components || []).forEach(function (c) { a.components[c.key] = Object.assign({ source: s.name }, c); a.hasComponents = true; });
   });
   a.ignore = (profile.ignore || []).map(function (p) { return String(p).trim(); }).filter(Boolean).map(globToRe);
   return a;
@@ -406,33 +407,31 @@ function weightOf(style) {
 function textStyleFor(a, node) {
   if (!a.textStyles.length || node.fontName === figma.mixed || node.fontSize === figma.mixed) return null;
   const w = weightOf(node.fontName.style), size = node.fontSize, fam = node.fontName.family;
-  function pick(list, exact) {
-    if (list.length > 1) {
-      const same = list.filter(function (st) { return st.family === fam; });
-      if (same.length) list = same;
-    }
-    if (list.length === 1) return { style: list[0], exact: exact && list[0].family === fam };
-    if (list.length > 1) return { many: list };
-    return null;
-  }
-  const exact = pick(a.textStyles.filter(function (st) { return st.weight === w && st.size === size; }), true);
-  if (exact) return exact;
-  let best = null;
+  // Оценка похожести: разница в размере + насыщенность (на ступень 100 → 1,5) + чуть-чуть за другой шрифт.
+  // Так шрифт чужой ДС (Inter Medium 15) находит ближайший наш стиль (Open Sans SemiBold 14).
+  const scored = [];
   a.textStyles.forEach(function (st) {
-    if (st.weight !== w) return;
-    const d = Math.abs(st.size - size);
-    if (!best || d < best.d || (d === best.d && st.size < best.size)) best = { d: d, size: st.size };
+    const ds = Math.abs(st.size - size), dw = Math.abs(st.weight - w) / 100;
+    if (ds > 4 || dw > 2) return;
+    scored.push({ st: st, sc: ds + dw * 1.5 + (st.family === fam ? 0 : 0.25) });
   });
-  if (!best || best.d > 2) return null;
-  return pick(a.textStyles.filter(function (st) { return st.weight === w && st.size === best.size; }), false);
+  if (!scored.length) return null;
+  scored.sort(function (x, y) { return x.sc - y.sc || y.st.weight - x.st.weight || y.st.size - x.st.size; });
+  const exact = scored[0].sc === 0 && (scored.length === 1 || scored[1].sc > 0);
+  return { styles: exact ? [scored[0].st] : scored.slice(0, 4).map(function (x) { return x.st; }), exact: scored[0].sc === 0 };
 }
+
+const WEIGHT_NAMES = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
 
 function textFix(a, node) {
   const m = textStyleFor(a, node);
   if (!m) return { suggest: [], fix: null };
-  if (m.many) return { suggest: m.many.slice(0, 3).map(function (st) { return st.name; }), fix: null };
-  const label = m.style.name + (m.exact ? '' : ' (' + m.style.family + ' ' + m.style.size + ')');
-  return { suggest: [label], fix: { kind: 'textStyle', key: m.style.key, name: m.style.name, approx: !m.exact } };
+  const st = m.styles[0];
+  const label = st.name + (m.exact ? '' : ' (' + st.family + ' ' + (WEIGHT_NAMES[st.weight] || st.weight) + ' ' + st.size + ')');
+  const opts = m.styles.length > 1 ? m.styles.map(function (x) {
+    return { key: x.key, name: x.name + ' · ' + (WEIGHT_NAMES[x.weight] || x.weight) + ' ' + x.size };
+  }) : null;
+  return { suggest: [label], fix: { kind: 'textStyle', key: st.key, name: st.name, approx: !m.exact, options: opts } };
 }
 
 function pathOf(node) {
@@ -479,6 +478,7 @@ function addIssue(run, rule, node, ctx, extra) {
   };
   Object.keys(extra || {}).forEach(function (k) { if (k !== 'sub') issue[k] = extra[k]; });
   run.issues.push(issue);
+  return issue;
 }
 
 async function varInfo(run, id) {
@@ -792,6 +792,60 @@ async function checkNode(run, node, ctx) {
   checkRadius(run, node, ctx);
 }
 
+function reachesDocument(n) {
+  let c = n;
+  while (c) { if (c.type === 'DOCUMENT') return true; c = c.parent; }
+  return false;
+}
+
+// ---------- замена сломанных компонентов ----------
+
+function normName(s) { return String(s || '').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim(); }
+function nameScore(x, y) {
+  const a = normName(x), b = normName(y);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.indexOf(b) >= 0 || b.indexOf(a) >= 0) return 0.8;
+  const ta = a.split(' '), tb = b.split(' ');
+  const inter = ta.filter(function (t) { return tb.indexOf(t) >= 0; }).length;
+  return inter / Math.max(ta.length, tb.length);
+}
+function idNum(id) { const p = String(id).split(':'); return (parseInt(p[0], 10) || 0) * 1e7 + (parseInt(p[1], 10) || 0); }
+
+// Ищем рабочие компоненты с похожим именем: сначала в этом файле (по всем страницам), затем в библиотеках профиля.
+// Свои локальные идут первыми — сломанный компонент был локальным, а у ДС может быть одноимённый, но другой.
+async function findReplacements(run) {
+  const local = [];
+  const pages = figma.root.children;
+  for (let i = 0; i < pages.length; i++) {
+    if (run.cancelled) return;
+    post('check-progress', { count: run.count, text: 'Ищу замену сломанным компонентам: стр. ' + (i + 1) + ' из ' + pages.length });
+    await pages[i].loadAsync();
+    pages[i].findAllWithCriteria({ types: ['COMPONENT_SET', 'COMPONENT'] }).forEach(function (n) {
+      if (n.type === 'COMPONENT' && n.parent && n.parent.type === 'COMPONENT_SET') return;
+      local.push({ ref: 'local:' + n.id, name: n.name, where: 'стр. «' + pages[i].name.trim() + '»', order: idNum(n.id), lib: false });
+    });
+    await tick();
+  }
+  const lib = Object.keys(run.a.components).map(function (k) {
+    const c = run.a.components[k];
+    return { ref: (c.set ? 'libset:' : 'lib:') + c.key, name: c.name, where: c.source || 'библиотека ДС', order: 0, lib: true };
+  });
+  const all = local.concat(lib);
+  run.broken.forEach(function (issue) {
+    const scored = all.map(function (c) { return { c: c, s: nameScore(issue.value, c.name) }; })
+      .filter(function (x) { return x.s >= 0.6; });
+    scored.sort(function (x, y) { return y.s - x.s || (x.c.lib ? 1 : 0) - (y.c.lib ? 1 : 0) || y.c.order - x.c.order; });
+    const opts = scored.slice(0, 6).map(function (x) { return { key: x.c.ref, name: x.c.name + ' — ' + x.c.where }; });
+    if (opts.length) {
+      issue.fix = { kind: 'swap', key: opts[0].key, name: opts[0].name, options: opts.length > 1 ? opts : null, variant: issue.variant };
+      issue.suggest = [opts[0].name];
+    } else {
+      issue.note += ' · похожих компонентов нет — создайте новый';
+    }
+  });
+}
+
 async function checkInstance(run, node, ctx) {
   const a = run.a;
   let mc = null;
@@ -800,6 +854,14 @@ async function checkInstance(run, node, ctx) {
   const set = mc.parent && mc.parent.type === 'COMPONENT_SET' ? mc.parent : null;
   const key = set ? set.key : mc.key;
   const name = set ? set.name : mc.name;
+  // Главный компонент удалён из файла: у локального компонента цепочка родителей не доходит до документа.
+  if (!mc.remote && !reachesDocument(mc)) {
+    const issue = addIssue(run, 'component.broken', node, ctx, {
+      prop: 'Компонент', value: name, note: 'главный компонент удалён из файла', variant: set ? mc.name : ''
+    });
+    if (issue) run.broken.push(issue);
+    return;
+  }
   if (isIgnored(a, name) || isIgnored(a, node.name)) return;
   if (a.components[key] || a.components[mc.key]) return;
   if (mc.remote) {
@@ -892,7 +954,7 @@ async function runCheck(profileId) {
   const roots = sel.slice();
   const run = {
     a: buildAllowed(profile), issues: [], seen: {}, varCache: {}, styleCache: {},
-    count: 0, instances: 0, overrides: 0, slots: 0, truncated: false, cancelled: false, scopeCtx: null
+    count: 0, instances: 0, overrides: 0, slots: 0, truncated: false, cancelled: false, scopeCtx: null, broken: []
   };
   currentRun = run;
   const t0 = Date.now();
@@ -901,6 +963,7 @@ async function runCheck(profileId) {
     await walk(run, roots[i]);
     if (run.cancelled) break;
   }
+  if (run.broken.length && !run.cancelled) await findReplacements(run);
   currentRun = null;
   post('check-done', {
     result: {
@@ -947,6 +1010,48 @@ async function loadNodeFonts(node) {
   for (let k = 0; k < fonts.length; k++) await figma.loadFontAsync(fonts[k]);
 }
 
+function parseVariant(name) {
+  const o = {};
+  String(name || '').split(',').forEach(function (p) {
+    const i = p.indexOf('=');
+    if (i > 0) o[p.slice(0, i).trim().toLowerCase()] = p.slice(i + 1).trim().toLowerCase();
+  });
+  return o;
+}
+
+async function resolveComponent(ref) {
+  const i = ref.indexOf(':');
+  const kind = ref.slice(0, i), id = ref.slice(i + 1);
+  if (kind === 'local') {
+    const n = await figma.getNodeByIdAsync(id);
+    let p = n; while (p && p.type !== 'PAGE') p = p.parent;
+    if (p) await p.loadAsync();
+    return n;
+  }
+  if (kind === 'libset') return figma.importComponentSetByKeyAsync(id);
+  return figma.importComponentByKeyAsync(id);
+}
+
+// Для набора вариантов берём тот же вариант, что был у сломанного (Редактировать=Off, Заполнено=-),
+// иначе вариант с наибольшим числом совпавших свойств, иначе вариант по умолчанию.
+function pickVariant(target, variantName) {
+  if (!target) throw new Error('компонент для замены не найден');
+  if (target.type === 'COMPONENT') return target;
+  if (target.type !== 'COMPONENT_SET') throw new Error('это не компонент');
+  const kids = target.children.filter(function (c) { return c.type === 'COMPONENT'; });
+  const same = kids.find(function (c) { return c.name === variantName; });
+  if (same) return same;
+  const want = parseVariant(variantName);
+  let best = null, bs = 0;
+  kids.forEach(function (c) {
+    const have = parseVariant(c.name);
+    let sc = 0;
+    Object.keys(want).forEach(function (k) { if (have[k] === want[k]) sc++; });
+    if (sc > bs) { bs = sc; best = c; }
+  });
+  return best || target.defaultVariant || kids[0];
+}
+
 async function applyFixes(issues) {
   const cache = {};
   const fixed = [];
@@ -964,6 +1069,10 @@ async function applyFixes(issues) {
           if (!v) throw new Error('переменная ' + f.name + ' недоступна');
           node.setBoundVariable(f.field, v);
         }
+      } else if (fix.kind === 'swap') {
+        if (node.type !== 'INSTANCE') throw new Error('слой не инстанс');
+        const comp = pickVariant(await resolveComponent(fix.key), fix.variant);
+        node.swapComponent(comp);
       } else if (fix.kind === 'textStyle') {
         if (node.type !== 'TEXT') throw new Error('слой не текстовый');
         const st = await findTextStyleByKey(cache, fix.key);

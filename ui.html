@@ -222,6 +222,9 @@
   .notice svg { color: var(--info); margin-top: 1px; }
   .notice.warn { background: var(--warning-bg); }
   .notice.warn svg { color: var(--warning); }
+  .notice.err { background: var(--error-bg); }
+  .notice.err svg { color: var(--error); }
+  .notice.err b { color: var(--error); font-weight: 700; }
   .notice .grow { flex: 1; }
   .notice .btn { margin: -4px -4px -4px 0; }
 
@@ -348,6 +351,11 @@
 
   .sheet-wrap { position: fixed; inset: 0; background: rgba(11, 15, 28, .4); display: flex; align-items: flex-end; z-index: 10; }
   .sheet { background: var(--surface); width: 100%; border-radius: var(--r-l) var(--r-l) 0 0; padding: 16px; box-shadow: var(--shadow-m); }
+  .swap-list { max-height: 300px; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+  .swap-item { padding: 10px 0; border-top: 1px solid var(--border); }
+  .swap-item:first-child { border-top: 0; }
+  .swap-item .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .select.xs.wide { max-width: 100%; flex: 1; }
   .sheet .textarea { min-height: 180px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
   .toast {
@@ -522,7 +530,7 @@
     if (S.running) {
       html += '<button class="btn secondary block" data-act="cancel">Остановить</button>' +
         '<div class="progress" aria-hidden="true"><i></i></div>' +
-        '<p class="hint">Проверено ' + fmt(S.progress) + ' ' + plural(S.progress, 'слой', 'слоя', 'слоёв') + '</p>';
+        '<p class="hint">' + (S.progressText ? esc(S.progressText) : 'Проверено ' + fmt(S.progress) + ' ' + plural(S.progress, 'слой', 'слоя', 'слоёв')) + '</p>';
     } else {
       html += '<button class="btn primary block" data-act="run"' + (noSources || !sel ? ' disabled' : '') + '>' +
         (sel > 1 ? 'Проверить ' + sel + ' ' + plural(sel, 'экран', 'экрана', 'экранов') : 'Проверить') + '</button>';
@@ -585,6 +593,12 @@
       '<div class="meta">' + esc(r.scopeLabel) + ' · ' + metaParts.join(' · ') + '</div>' +
     '</section>';
 
+    const brokenLeft = r.issues.filter((i) => i.rule === 'component.broken' && !S.fixed[i.id]).length;
+    if (brokenLeft) {
+      html += '<div class="notice err">' + I.info + '<div class="grow"><b>' + brokenLeft + ' ' + plural(brokenLeft, 'сломанный компонент', 'сломанных компонента', 'сломанных компонентов') + '.</b> ' +
+        'Главный компонент удалён из файла. Замените на рабочий или создайте новый.</div>' +
+        '<button class="btn ghost sm" data-act="show-broken">Показать</button></div>';
+    }
     if (r.cancelled) html += '<div class="notice warn">' + I.info + '<div class="grow">Проверка остановлена — результаты неполные.</div></div>';
     if (r.truncated) html += '<div class="notice warn">' + I.info + '<div class="grow">Показаны первые 3 000 нарушений. Проверьте меньшую область.</div></div>';
     if (r.textStylesNoDetails) html += '<div class="notice warn">' + I.info + '<div class="grow">Чтобы плагин подбирал текстовые стили, обновите источник с токенами в профиле (кнопка ↻).</div>' +
@@ -620,7 +634,7 @@
     const groups = {};
     list.forEach((i) => { (groups[i.rule] = groups[i.rule] || []).push(i); });
     const order = S.rules.map((x) => x.id).filter((id) => groups[id]);
-    order.sort((a, b) => SEV_ORDER[groups[a][0].sev] - SEV_ORDER[groups[b][0].sev]);
+    order.sort((a, b) => (b === 'component.broken') - (a === 'component.broken') || SEV_ORDER[groups[a][0].sev] - SEV_ORDER[groups[b][0].sev]);
     html += order.map((id) => viewGroup(id, groups[id])).join('');
     return html;
   }
@@ -644,7 +658,7 @@
     if (open) {
       const fixable = items.filter((i) => i.fix && !S.fixed[i.id]);
       html += '<div class="group-body"><div class="group-hint"><div class="grow">' + esc(rule.hint) + '</div>' +
-        (fixable.length > 1 ? '<button class="btn ghost sm" data-act="fix-group" data-v="' + ruleId + '"' + (S.fixing ? ' disabled' : '') + '>Исправить ' + fixable.length + '</button>' : '') +
+        (fixable.length > 1 ? '<button class="btn ghost sm" data-act="fix-group" data-v="' + ruleId + '"' + (S.fixing ? ' disabled' : '') + '>' + (ruleId === 'component.broken' ? 'Заменить ' : 'Исправить ') + fixable.length + '</button>' : '') +
       '</div>';
       const lim = S.limit[ruleId] || 50;
       html += items.slice(0, lim).map(viewRow).join('');
@@ -675,7 +689,7 @@
     if (i.fix && i.fix.approx) sub.push('<span class="approx">ближайшее значение — проверьте вёрстку</span>');
     let act = '';
     if (done) act = '<span class="done-mark">' + I.check + 'Готово</span>';
-    else if (i.fix) act = '<button class="btn ghost sm" data-act="fix-one" data-v="' + i.id + '"' + (S.fixing ? ' disabled' : '') + '>Исправить</button>';
+    else if (i.fix) act = '<button class="btn ghost sm" data-act="fix-one" data-v="' + i.id + '"' + (S.fixing ? ' disabled' : '') + '>' + (i.fix.kind === 'swap' ? 'Заменить' : 'Исправить') + '</button>';
     return '<div class="row' + (done ? ' done' : '') + '" data-act="select" data-v="' + esc(i.nodeId) + '" title="Показать слой на холсте">' +
       '<div class="row-main">' +
         '<div class="row-name"><span class="t">' + esc(i.nodeName || 'Без имени') + '</span>' + ctxTag + '</div>' +
@@ -804,8 +818,30 @@
     '</div>';
   }
 
+  function viewSwapSheet(sh) {
+    const items = S.result.issues.filter((i) => sh.ids.indexOf(i.id) >= 0);
+    const swaps = items.filter((i) => i.fix.kind === 'swap');
+    const other = items.length - swaps.length;
+    return '<div class="sheet-wrap" data-act="sheet-close-bg"><div class="sheet" role="dialog" aria-modal="true">' +
+      '<h2 class="card-title">Заменить ' + (swaps.length === 1 ? 'сломанный компонент' : swaps.length + ' ' + plural(swaps.length, 'сломанный компонент', 'сломанных компонента', 'сломанных компонентов')) + '?</h2>' +
+      '<p class="hint" style="margin:-4px 0 12px">Инстанс переключится на выбранный компонент, тексты и другие изменения в нём сохранятся. Отменить можно через Cmd/Ctrl+Z.</p>' +
+      '<div class="swap-list">' + swaps.map((i) =>
+        '<div class="swap-item"><div class="t">' + esc(i.nodeName) + ' <span class="faint">· ' + esc(i.value) + (i.fix.variant ? ' · ' + esc(i.fix.variant) : '') + '</span></div>' +
+        '<div class="row-sub"><span class="arrow">→</span>' +
+          (i.fix.options
+            ? '<select class="select xs wide" data-change="fix-opt" data-v="' + i.id + '">' + i.fix.options.map((o) => '<option value="' + esc(o.key) + '"' + (o.key === i.fix.key ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('') + '</select>'
+            : '<span class="arrow">' + esc(i.fix.name) + '</span>') +
+        '</div></div>').join('') + '</div>' +
+      (other ? '<p class="hint">Вместе с этим исправится ещё ' + other + ' ' + plural(other, 'нарушение', 'нарушения', 'нарушений') + '.</p>' : '') +
+      '<div class="btn-row" style="margin-top:12px">' +
+        '<button class="btn secondary" data-act="sheet-close">Отмена</button>' +
+        '<button class="btn primary" data-act="swap-confirm">Заменить</button>' +
+      '</div></div></div>';
+  }
+
   function viewSheet() {
     const sh = S.sheet;
+    if (sh.kind === 'swap') return viewSwapSheet(sh);
     const isExport = sh.kind === 'export';
     return '<div class="sheet-wrap" data-act="sheet-close-bg"><div class="sheet" role="dialog" aria-modal="true">' +
       '<h2 class="card-title">' + (isExport ? 'Экспорт профиля' : 'Импорт профиля') + '</h2>' +
@@ -844,9 +880,16 @@
     persist();
   }
 
-  function fixIssues(list) {
+  function fixIssues(list, confirmed) {
     const todo = list.filter((i) => i.fix && !S.fixed[i.id]);
     if (!todo.length) return;
+    // Замену компонента делаем только после подтверждения.
+    if (!confirmed && todo.some((i) => i.fix.kind === 'swap')) {
+      S.sheet = { kind: 'swap', ids: todo.map((i) => i.id) };
+      render();
+      return;
+    }
+    S.sheet = null;
     S.fixing = true;
     render();
     send('fix', { issues: todo.map((i) => ({ id: i.id, nodeId: i.nodeId, fix: i.fix })) });
@@ -1003,7 +1046,7 @@
       case 'tab': setTab(v); break;
       case 'run': {
         const p = activeProfile();
-        S.running = true; S.progress = 0; S.result = null; S.fixed = {}; S.open = {}; S.limit = {}; S.sevFilter = null; S.catFilter = null;
+        S.running = true; S.progress = 0; S.progressText = ''; S.result = null; S.fixed = {}; S.open = {}; S.limit = {}; S.sevFilter = null; S.catFilter = null;
         render();
         send('check', { profileId: p.id });
         break;
@@ -1063,6 +1106,15 @@
       }
       case 'import': S.sheet = { kind: 'import', text: '' }; render(); break;
       case 'sheet-close': S.sheet = null; render(); break;
+      case 'swap-confirm': {
+        const ids = S.sheet.ids;
+        fixIssues(S.result.issues.filter((i) => ids.indexOf(i.id) >= 0), true);
+        break;
+      }
+      case 'show-broken':
+        S.catFilter = 'component'; S.sevFilter = null; S.open['component.broken'] = true; render();
+        { const g = app.querySelector('[data-v="component.broken"]'); if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+        break;
       case 'copy': {
         const ta = document.getElementById('sheet-text');
         ta.select();
@@ -1144,7 +1196,7 @@
         S.thumb = { id: m.id, url: URL.createObjectURL(new Blob([m.bytes], { type: 'image/png' })) };
         if (!S.running) render();
         break;
-      case 'check-progress': S.progress = m.count; render(); break;
+      case 'check-progress': S.progress = m.count; S.progressText = m.text || ''; render(); break;
       case 'check-done': S.running = false; S.result = m.result; autoOpen(); render(); break;
       case 'check-error': S.running = false; render(); toast(m.message); break;
       case 'sync-progress': S.syncText = m.text; render(); break;
