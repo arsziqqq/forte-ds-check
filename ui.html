@@ -1245,6 +1245,7 @@
         if (!m.meta.progressive) { S.replText = ''; S.replMeta = m.meta; }
         render();
         break;
+      case 'state': S.data = m.state; break;
       case 'toast': toast(m.text); break;
       case 'error':
         S.running = false; S.syncing = null; S.fixing = false;

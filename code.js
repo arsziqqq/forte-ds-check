@@ -379,6 +379,20 @@ function snapColor(a, need, hex) {
   if (!best || best.d > COLOR_SNAP) return { vars: [], exact: false };
   return { vars: rankByHint(pool.filter(function (v) { return v.value.toLowerCase() === best.value; }), need), exact: false };
 }
+// Для чужого цветового стиля: точное или близкое совпадение, иначе 3 ближайших токена на выбор.
+function nearestColors(a, need, hex, limit) {
+  const h = hex.toLowerCase();
+  const explicit = a.colorVars.filter(function (v) { return explicitScope(v, need); });
+  const pool = explicit.length ? explicit : a.colorVars.filter(function (v) { return scopeOk(v.scopes, need); });
+  const seen = {};
+  return rankByHint(pool, need)
+    .map(function (v) { return { v: v, d: colorDist(h, v.value.toLowerCase()) }; })
+    .sort(function (x, y) { return x.d - y.d; })
+    .filter(function (x) { const k = x.v.name; if (seen[k]) return false; seen[k] = 1; return true; })
+    .slice(0, limit || 3)
+    .map(function (x) { return x.v; });
+}
+
 function colorFix(snap, target, index) {
   if (!snap.vars.length) return { suggest: [], fix: null };
   const opts = snap.vars.slice(0, 6).map(function (v) { return { key: v.key, name: v.name }; });
@@ -412,13 +426,15 @@ function textStyleFor(a, node) {
   const scored = [];
   a.textStyles.forEach(function (st) {
     const ds = Math.abs(st.size - size), dw = Math.abs(st.weight - w) / 100;
-    if (ds > 4 || dw > 2) return;
-    scored.push({ st: st, sc: ds + dw * 1.5 + (st.family === fam ? 0 : 0.25) });
+    scored.push({ st: st, sc: ds + dw * 1.5 + (st.family === fam ? 0 : 0.25), near: ds <= 4 && dw <= 2 });
   });
   if (!scored.length) return null;
+  // Если близких (±4 px, ±2 ступени насыщенности) нет — всё равно предлагаем 3 самых похожих на выбор.
   scored.sort(function (x, y) { return x.sc - y.sc || y.st.weight - x.st.weight || y.st.size - x.st.size; });
   const exact = scored[0].sc === 0 && (scored.length === 1 || scored[1].sc > 0);
-  return { styles: exact ? [scored[0].st] : scored.slice(0, 4).map(function (x) { return x.st; }), exact: scored[0].sc === 0 };
+  const near = scored.filter(function (x) { return x.near; });
+  const list = near.length ? near.slice(0, 4) : scored.slice(0, 3);
+  return { styles: exact ? [scored[0].st] : list.map(function (x) { return x.st; }), exact: scored[0].sc === 0 };
 }
 
 const WEIGHT_NAMES = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
@@ -513,7 +529,26 @@ async function checkStyle(run, node, styleId, ctx, prop) {
   const info = await styleInfo(run, styleId);
   if (!info) return;
   if (run.a.styles[info.key]) return;
-  const f = prop === 'text' && node.type === 'TEXT' && node.textStyleId !== figma.mixed ? textFix(run.a, node) : { suggest: [], fix: null };
+  let f = { suggest: [], fix: null };
+  if (prop === 'text' && node.type === 'TEXT' && node.textStyleId !== figma.mixed) {
+    f = textFix(run.a, node);
+  } else if ((prop === 'fills' || prop === 'strokes') && Array.isArray(node[prop])) {
+    const i = node[prop].findIndex(function (p) { return p.visible !== false && p.type === 'SOLID'; });
+    if (i >= 0) {
+      const pt = node[prop][i];
+      const hex = colorHex(pt.color, pt.opacity === undefined ? 1 : pt.opacity);
+      const need = prop === 'fills' ? fillScopes(node) : ['STROKE_COLOR'];
+      f = colorFix(snapColor(run.a, need, hex), prop, i);
+      if (!f.fix) {
+        const near = nearestColors(run.a, need, hex, 3);
+        if (near.length) {
+          const opts = near.map(function (v) { return { key: v.key, name: v.name + ' · ' + v.value.toUpperCase() }; });
+          f = { suggest: [opts[0].name], fix: { kind: 'paint', target: prop, index: i, key: opts[0].key, name: opts[0].name, approx: true, options: opts.length > 1 ? opts : null } };
+        }
+      }
+      if (f.fix) f.fix.clearStyle = true;
+    }
+  }
   addIssue(run, 'style.foreign', node, ctx, {
     sub: 'style-' + prop + '-' + info.key,
     prop: propLabel(prop) === prop ? 'Стиль' : propLabel(prop),
@@ -1023,6 +1058,31 @@ async function walkWithCtx(run, node, ctx) {
   run.scopeCtx = prev;
 }
 
+// Профиль синхронизирован старой версией — у текстовых стилей нет шрифта и размера, и подбор стиля
+// для текста не работает. Дочитываем параметры из библиотеки (она подключена к файлу) и сохраняем в профиль.
+async function fillTextStyleDetails(run, profile) {
+  post('check-progress', { count: 0, text: 'Читаю параметры текстовых стилей ДС' });
+  let changed = false;
+  for (let s = 0; s < profile.sources.length; s++) {
+    const styles = profile.sources[s].styles || [];
+    for (let i = 0; i < styles.length; i++) {
+      const st = styles[i];
+      if (st.type !== 'TEXT' || (typeof st.size === 'number' && st.weight)) continue;
+      try {
+        const ts = await figma.importStyleByKeyAsync(st.key);
+        if (ts && ts.type === 'TEXT') {
+          st.family = ts.fontName.family; st.weight = weightOf(ts.fontName.style); st.size = ts.fontSize;
+          changed = true;
+        }
+      } catch (e) { /* библиотека не подключена к файлу — пропускаем */ }
+    }
+  }
+  if (!changed) return;
+  await saveState();
+  post('state', { state: state });
+  run.a = buildAllowed(profile);
+}
+
 async function runCheck(profileId) {
   const profile = state.profiles.find(function (p) { return p.id === profileId; });
   if (!profile) { post('check-error', { message: 'Профиль не найден' }); return; }
@@ -1039,6 +1099,7 @@ async function runCheck(profileId) {
   currentRun = run;
   const t0 = Date.now();
   post('check-progress', { count: 0 });
+  if (run.a.textStylesNoDetails) await fillTextStyleDetails(run, profile);
   for (let i = 0; i < roots.length; i++) {
     await walk(run, roots[i]);
     if (run.cancelled) break;
@@ -1167,6 +1228,11 @@ async function applyFixes(issues) {
         if (!v) throw new Error('переменная ' + fix.name + ' недоступна');
         const paints = node[fix.target].slice();
         paints[fix.index] = figma.variables.setBoundVariableForPaint(paints[fix.index], 'color', v);
+        // Чужой цветовой стиль отвязываем, иначе он перебьёт привязку к токену.
+        if (fix.clearStyle) {
+          if (fix.target === 'fills' && node.fillStyleId) await node.setFillStyleIdAsync('');
+          if (fix.target === 'strokes' && node.strokeStyleId) await node.setStrokeStyleIdAsync('');
+        }
         node[fix.target] = paints;
       }
       fixed.push(it.id);
