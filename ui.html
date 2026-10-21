@@ -225,6 +225,10 @@
   .notice.err { background: var(--error-bg); }
   .notice.err svg { color: var(--error); }
   .notice.err b { color: var(--error); font-weight: 700; }
+  .cache-note { margin-top: 6px; color: var(--text-3); }
+  .repl-status { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-2); white-space: nowrap; }
+  .repl-status .spinner { width: 12px; height: 12px; color: var(--accent-text); }
+  .btn.inline { height: 20px; padding: 0 4px; }
   .notice .grow { flex: 1; }
   .notice .btn { margin: -4px -4px -4px 0; }
 
@@ -596,8 +600,9 @@
     const brokenLeft = r.issues.filter((i) => i.rule === 'component.broken' && !S.fixed[i.id]).length;
     if (brokenLeft) {
       html += '<div class="notice err">' + I.info + '<div class="grow"><b>' + brokenLeft + ' ' + plural(brokenLeft, 'сломанный компонент', 'сломанных компонента', 'сломанных компонентов') + '.</b> ' +
-        'Главный компонент удалён из файла. Замените на рабочий или создайте новый.</div>' +
-        '<button class="btn ghost sm" data-act="show-broken">Показать</button></div>';
+        'Главный компонент удалён из файла. Замените на рабочий или создайте новый.' +
+        (S.replText ? '<div class="repl-status"><span class="spinner"></span>' + esc(S.replText) + ' <button class="btn ghost sm inline" data-act="cancel-repl">Остановить</button></div>' : '') +
+        '</div><button class="btn ghost sm" data-act="show-broken">Показать</button></div>';
     }
     if (r.cancelled) html += '<div class="notice warn">' + I.info + '<div class="grow">Проверка остановлена — результаты неполные.</div></div>';
     if (r.truncated) html += '<div class="notice warn">' + I.info + '<div class="grow">Показаны первые 3 000 нарушений. Проверьте меньшую область.</div></div>';
@@ -657,7 +662,14 @@
       '</button>';
     if (open) {
       const fixable = items.filter((i) => i.fix && !S.fixed[i.id]);
-      html += '<div class="group-body"><div class="group-hint"><div class="grow">' + esc(rule.hint) + '</div>' +
+      let extra = '';
+      if (ruleId === 'component.broken' && S.replMeta && !S.replText) {
+        extra = '<div class="cache-note">' + (S.replMeta.fromCache
+          ? 'Компоненты файла взяты из памяти (' + fmtDate(S.replMeta.at) + ').'
+          : S.replMeta.partial ? 'Просмотрены не все страницы — для всех нашлось точное совпадение.' : 'Просмотрены все страницы файла.') +
+          ' <button class="btn ghost sm inline" data-act="rescan-repl">Искать заново</button></div>';
+      }
+      html += '<div class="group-body"><div class="group-hint"><div class="grow">' + esc(rule.hint) + extra + '</div>' +
         (fixable.length > 1 ? '<button class="btn ghost sm" data-act="fix-group" data-v="' + ruleId + '"' + (S.fixing ? ' disabled' : '') + '>' + (ruleId === 'component.broken' ? 'Заменить ' : 'Исправить ') + fixable.length + '</button>' : '') +
       '</div>';
       const lim = S.limit[ruleId] || 50;
@@ -676,7 +688,9 @@
       '<b>' + esc(i.value) + '</b>';
     const sub = [];
     if (i.note) sub.push('<span>' + esc(i.note) + '</span>');
-    if (i.fix && i.fix.options && !done) {
+    if (i.searching) {
+      sub.push('<span class="arrow">ищу замену…</span>');
+    } else if (i.fix && i.fix.options && !done) {
       // Несколько подходящих токенов с одинаковым значением — даём выбрать, по умолчанию первый.
       sub.push('<span class="arrow">→</span><select class="select xs" data-change="fix-opt" data-v="' + i.id + '" aria-label="Токен для исправления">' +
         i.fix.options.map((o) => '<option value="' + esc(o.key) + '"' + (o.key === i.fix.key ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('') +
@@ -1046,7 +1060,7 @@
       case 'tab': setTab(v); break;
       case 'run': {
         const p = activeProfile();
-        S.running = true; S.progress = 0; S.progressText = ''; S.result = null; S.fixed = {}; S.open = {}; S.limit = {}; S.sevFilter = null; S.catFilter = null;
+        S.running = true; S.progress = 0; S.progressText = ''; S.replText = ''; S.replMeta = null; S.result = null; S.fixed = {}; S.open = {}; S.limit = {}; S.sevFilter = null; S.catFilter = null;
         render();
         send('check', { profileId: p.id });
         break;
@@ -1111,6 +1125,11 @@
         fixIssues(S.result.issues.filter((i) => ids.indexOf(i.id) >= 0), true);
         break;
       }
+      case 'cancel-repl': send('cancel-repl'); break;
+      case 'rescan-repl':
+        S.result.issues.forEach((x) => { if (x.rule === 'component.broken' && !S.fixed[x.id]) x.searching = true; });
+        S.replText = 'Ищу замену…'; render(); send('rescan-repl');
+        break;
       case 'show-broken':
         S.catFilter = 'component'; S.sevFilter = null; S.open['component.broken'] = true; render();
         { const g = app.querySelector('[data-v="component.broken"]'); if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
@@ -1215,6 +1234,17 @@
           : 'Исправлено ' + m.fixed.length);
         break;
       case 'sync-cancelled': S.syncing = null; S.syncText = ''; render(); toast('Синхронизация остановлена'); break;
+      case 'repl-progress': S.replText = m.text; if (!S.fixing) render(); break;
+      case 'replacements':
+        if (S.result) {
+          m.updates.forEach((u) => {
+            const it = S.result.issues.find((x) => x.id === u.id);
+            if (it) { it.fix = u.fix; it.suggest = u.suggest; it.note = u.note; it.searching = false; }
+          });
+        }
+        if (!m.meta.progressive) { S.replText = ''; S.replMeta = m.meta; }
+        render();
+        break;
       case 'toast': toast(m.text); break;
       case 'error':
         S.running = false; S.syncing = null; S.fixing = false;

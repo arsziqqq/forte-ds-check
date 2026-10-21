@@ -812,38 +812,117 @@ function nameScore(x, y) {
 }
 function idNum(id) { const p = String(id).split(':'); return (parseInt(p[0], 10) || 0) * 1e7 + (parseInt(p[1], 10) || 0); }
 
-// Ищем рабочие компоненты с похожим именем: сначала в этом файле (по всем страницам), затем в библиотеках профиля.
+// Ищем рабочие компоненты с похожим именем: сначала в этом файле, затем в библиотеках профиля.
 // Свои локальные идут первыми — сломанный компонент был локальным, а у ДС может быть одноимённый, но другой.
-async function findReplacements(run) {
-  const local = [];
-  const pages = figma.root.children;
-  for (let i = 0; i < pages.length; i++) {
-    if (run.cancelled) return;
-    post('check-progress', { count: run.count, text: 'Ищу замену сломанным компонентам: стр. ' + (i + 1) + ' из ' + pages.length });
-    await pages[i].loadAsync();
-    pages[i].findAllWithCriteria({ types: ['COMPONENT_SET', 'COMPONENT'] }).forEach(function (n) {
-      if (n.type === 'COMPONENT' && n.parent && n.parent.type === 'COMPONENT_SET') return;
-      local.push({ ref: 'local:' + n.id, name: n.name, where: 'стр. «' + pages[i].name.trim() + '»', order: idNum(n.id), lib: false });
-    });
-    await tick();
-  }
+// Поиск идёт в фоне после показа результатов: страницы грузятся по одной (текущая и «компонентные» — первыми),
+// и как только для всех сломанных есть точное совпадение по имени, поиск останавливается.
+// Полный список компонентов файла запоминается на сутки — повторные проверки берут его мгновенно.
+const INDEX_PREFIX = 'forte-ds-check:idx:';
+const INDEX_TTL = 24 * 3600 * 1000;
+const COMPONENT_PAGE_RE = /компонент|component|kit|библиотек|library/i;
+let memIndex = null;
+let replJob = null;
+let lastRun = null;
+
+function fileId() { return figma.fileKey || figma.root.name; }
+
+function pageOrder() {
+  const pages = figma.root.children.slice();
+  const cur = figma.currentPage;
+  return [cur]
+    .concat(pages.filter(function (p) { return p !== cur && COMPONENT_PAGE_RE.test(p.name); }))
+    .concat(pages.filter(function (p) { return p !== cur && !COMPONENT_PAGE_RE.test(p.name); }));
+}
+
+function indexPage(page, items) {
+  page.findAllWithCriteria({ types: ['COMPONENT_SET', 'COMPONENT'] }).forEach(function (n) {
+    if (n.type === 'COMPONENT' && n.parent && n.parent.type === 'COMPONENT_SET') return;
+    items.push({ id: n.id, name: n.name, page: page.name.trim() });
+  });
+}
+
+// Точное совпадение по имени уже есть среди просмотренных страниц файла.
+// Совпадения в ДС досрочно не засчитываем: одноимённый компонент ДС бывает другим (header ДС ≠ Header страницы).
+function exactFound(issue, items) {
+  return items.some(function (c) { return nameScore(issue.value, c.name) === 1; });
+}
+
+function postReplacements(run, items, meta, onlyIds) {
+  const local = items.map(function (c) {
+    return { ref: 'local:' + c.id, name: c.name, where: 'стр. «' + c.page + '»', order: idNum(c.id), lib: false };
+  });
   const lib = Object.keys(run.a.components).map(function (k) {
     const c = run.a.components[k];
     return { ref: (c.set ? 'libset:' : 'lib:') + c.key, name: c.name, where: c.source || 'библиотека ДС', order: 0, lib: true };
   });
   const all = local.concat(lib);
-  run.broken.forEach(function (issue) {
+  const list = onlyIds ? run.broken.filter(function (b) { return onlyIds.indexOf(b.id) >= 0; }) : run.broken;
+  const updates = list.map(function (issue) {
     const scored = all.map(function (c) { return { c: c, s: nameScore(issue.value, c.name) }; })
       .filter(function (x) { return x.s >= 0.6; });
     scored.sort(function (x, y) { return y.s - x.s || (x.c.lib ? 1 : 0) - (y.c.lib ? 1 : 0) || y.c.order - x.c.order; });
     const opts = scored.slice(0, 6).map(function (x) { return { key: x.c.ref, name: x.c.name + ' — ' + x.c.where }; });
+    const u = { id: issue.id, fix: null, suggest: [], note: 'главный компонент удалён из файла' };
     if (opts.length) {
-      issue.fix = { kind: 'swap', key: opts[0].key, name: opts[0].name, options: opts.length > 1 ? opts : null, variant: issue.variant };
-      issue.suggest = [opts[0].name];
+      u.fix = { kind: 'swap', key: opts[0].key, name: opts[0].name, options: opts.length > 1 ? opts : null, variant: issue.variant };
+      u.suggest = [opts[0].name];
     } else {
-      issue.note += ' · похожих компонентов нет — создайте новый';
+      u.note += ' · похожих компонентов нет — создайте новый';
     }
+    return u;
   });
+  post('replacements', { updates: updates, meta: meta });
+}
+
+async function findReplacements(run, force) {
+  if (replJob) replJob.cancelled = true;
+  const job = { cancelled: false };
+  replJob = job;
+  const id = fileId();
+
+  if (!force) {
+    let cached = memIndex && memIndex.fileId === id ? memIndex : null;
+    if (!cached) {
+      try {
+        const c = await figma.clientStorage.getAsync(INDEX_PREFIX + id);
+        if (c && c.items) cached = Object.assign({ fileId: id }, c);
+      } catch (e) { cached = null; }
+    }
+    if (cached && Date.now() - cached.at < INDEX_TTL) {
+      memIndex = cached;
+      postReplacements(run, cached.items, { fromCache: true, at: cached.at });
+      return;
+    }
+  }
+
+  const items = [];
+  const pages = pageOrder();
+  const resolved = [];
+  let early = false;
+  for (let i = 0; i < pages.length; i++) {
+    if (job.cancelled) break;
+    post('repl-progress', { text: 'Ищу замену · стр. ' + (i + 1) + '/' + pages.length });
+    await pages[i].loadAsync();
+    indexPage(pages[i], items);
+    await tick();
+    // Найденные точные совпадения показываем сразу, не дожидаясь конца поиска.
+    const fresh = run.broken.filter(function (b) { return resolved.indexOf(b.id) < 0 && exactFound(b, items); })
+      .map(function (b) { return b.id; });
+    if (fresh.length) {
+      fresh.forEach(function (id) { resolved.push(id); });
+      postReplacements(run, items, { progressive: true }, fresh);
+    }
+    // «Искать заново» (force) всегда смотрит весь файл; обычный поиск останавливается, когда всё найдено.
+    if (!force && resolved.length === run.broken.length) { early = i < pages.length - 1; break; }
+  }
+  if (job.cancelled && replJob !== job) return;   // запущен новый поиск — этот молча выходим
+  const complete = !job.cancelled && !early;
+  if (complete) {
+    memIndex = { fileId: id, items: items, at: Date.now() };
+    try { await figma.clientStorage.setAsync(INDEX_PREFIX + id, { items: items, at: memIndex.at }); } catch (e) { /* кэш необязателен */ }
+  }
+  replJob = null;
+  postReplacements(run, items, { fromCache: false, partial: !complete, cancelled: job.cancelled });
 }
 
 async function checkInstance(run, node, ctx) {
@@ -857,7 +936,7 @@ async function checkInstance(run, node, ctx) {
   // Главный компонент удалён из файла: у локального компонента цепочка родителей не доходит до документа.
   if (!mc.remote && !reachesDocument(mc)) {
     const issue = addIssue(run, 'component.broken', node, ctx, {
-      prop: 'Компонент', value: name, note: 'главный компонент удалён из файла', variant: set ? mc.name : ''
+      prop: 'Компонент', value: name, note: 'главный компонент удалён из файла', variant: set ? mc.name : '', searching: true
     });
     if (issue) run.broken.push(issue);
     return;
@@ -952,6 +1031,7 @@ async function runCheck(profileId) {
   const sel = figma.currentPage.selection;
   if (!sel.length) { post('check-error', { message: 'Выделите экран на холсте' }); return; }
   const roots = sel.slice();
+  if (replJob) replJob.cancelled = true;
   const run = {
     a: buildAllowed(profile), issues: [], seen: {}, varCache: {}, styleCache: {},
     count: 0, instances: 0, overrides: 0, slots: 0, truncated: false, cancelled: false, scopeCtx: null, broken: []
@@ -963,8 +1043,8 @@ async function runCheck(profileId) {
     await walk(run, roots[i]);
     if (run.cancelled) break;
   }
-  if (run.broken.length && !run.cancelled) await findReplacements(run);
   currentRun = null;
+  lastRun = run;
   post('check-done', {
     result: {
       profileId: profile.id,
@@ -976,6 +1056,7 @@ async function runCheck(profileId) {
       issues: run.issues
     }
   });
+  if (run.broken.length && !run.cancelled) await findReplacements(run, false);
 }
 
 // ---------- исправления ----------
@@ -1131,6 +1212,10 @@ figma.ui.onmessage = async function (msg) {
       syncCancelled = true;
     } else if (msg.type === 'check') {
       await runCheck(msg.profileId);
+    } else if (msg.type === 'cancel-repl') {
+      if (replJob) replJob.cancelled = true;
+    } else if (msg.type === 'rescan-repl') {
+      if (lastRun && lastRun.broken.length) await findReplacements(lastRun, true);
     } else if (msg.type === 'cancel') {
       if (currentRun) currentRun.cancelled = true;
     } else if (msg.type === 'select') {

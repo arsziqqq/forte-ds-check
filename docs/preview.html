@@ -130,7 +130,20 @@ const handlers = {
       c += 120; toUI({ type: 'check-progress', count: c });
       if (c >= 480) {
         clearInterval(t);
-        toUI({ type: 'check-done', result: { profileId: 'p1', scope: 'selection', scopeLabel: '1. До расчета - rest', count: 468, instances: 137, overrides: 41, slots: 2, ms: 840, truncated: false, cancelled: false, hasComponents: true, issues: clean ? [] : issues() } });
+        const list = clean ? [] : issues();
+        // Сломанные приходят без замены — её «ищет» фон.
+        const pending = {};
+        list.forEach((i) => { if (i.rule === 'component.broken') { pending[i.id] = { fix: i.fix, suggest: i.suggest, note: i.note }; i.fix = null; i.suggest = []; i.searching = true; } });
+        toUI({ type: 'check-done', result: { profileId: 'p1', scope: 'selection', scopeLabel: '1. До расчета - rest', count: 468, instances: 137, overrides: 41, slots: 2, ms: 840, truncated: false, cancelled: false, hasComponents: true, issues: list } });
+        const ids = Object.keys(pending);
+        if (ids.length) {
+          let pg = 0;
+          const tt = setInterval(() => {
+            pg++; toUI({ type: 'repl-progress', text: 'Ищу замену · стр. ' + pg + '/27' });
+            if (pg === 4) toUI({ type: 'replacements', meta: { progressive: true }, updates: ids.slice(0, 2).map((id) => Object.assign({ id }, pending[id])) });
+            if (pg === 27) { clearInterval(tt); toUI({ type: 'replacements', meta: { fromCache: false, partial: false }, updates: ids.map((id) => Object.assign({ id }, pending[id])) }); }
+          }, 120);
+        }
       }
     }, 150);
   },
